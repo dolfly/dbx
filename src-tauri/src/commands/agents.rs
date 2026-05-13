@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tauri::{Emitter, State};
 use tokio::sync::Mutex;
 
-use dbx_core::agent_manager::{AgentDriverInfo, AgentManager, AgentRegistry, InstalledDriver};
+use dbx_core::agent_manager::{AgentDriverInfo, AgentManager, AgentRegistry, InstalledDriver, DEFAULT_JRE_KEY};
 use dbx_core::connection::AppState;
 
 const REGISTRY_PATH: &str = "https://github.com/t8y2/dbx-agents/releases/latest/download/agent-registry.json";
@@ -39,6 +39,10 @@ fn build_agent_list(am: &AgentManager, registry: Option<&AgentRegistry>) -> Vec<
             let installed = am.is_driver_installed(key);
             let local = local_state.installed_drivers.get(*key);
             let remote = registry.and_then(|r| r.drivers.get(*key));
+            let jre_key = remote
+                .map(|r| r.jre.clone())
+                .or_else(|| local.map(|l| l.jre.clone()))
+                .unwrap_or_else(|| DEFAULT_JRE_KEY.to_string());
             AgentDriverInfo {
                 db_type: key.to_string(),
                 label: label.to_string(),
@@ -50,6 +54,8 @@ fn build_agent_list(am: &AgentManager, registry: Option<&AgentRegistry>) -> Vec<
                     (Some(l), Some(r)) => l.version != r.version,
                     _ => false,
                 },
+                jre: jre_key.clone(),
+                jre_installed: am.is_jre_installed(&jre_key),
             }
         })
         .collect()
@@ -74,31 +80,37 @@ pub async fn install_agent(
 ) -> Result<(), String> {
     let am = &state.agent_manager;
     let registry = fetch_registry().await?;
-    let needs_jre = !am.is_jre_installed();
+
+    let driver = registry.drivers.get(&db_type).ok_or_else(|| format!("Unknown driver type: {db_type}"))?;
+    let jre_key = &driver.jre;
+    let needs_jre = !am.is_jre_installed(jre_key);
 
     if needs_jre {
-        let platform = AgentManager::current_platform();
         let jre_info =
-            registry.jre.platforms.get(platform).ok_or_else(|| format!("No JRE available for platform: {platform}"))?;
+            registry.resolve_jre(jre_key).ok_or_else(|| format!("No JRE definition for version: {jre_key}"))?;
+        let platform = AgentManager::current_platform();
+        let platform_jre = jre_info
+            .platforms
+            .get(platform)
+            .ok_or_else(|| format!("No JRE {jre_key} available for platform: {platform}"))?;
         let jre_archive = am.base_dir().join("jre-download.tar.gz");
         let _ = app.emit(
             "agent-install-progress",
             serde_json::json!({
-                "step": "jre", "downloaded": 0u64, "total": jre_info.size,
+                "step": "jre", "downloaded": 0u64, "total": platform_jre.size,
             }),
         );
-        download_with_progress(&app, "jre", &jre_info.url, &jre_archive, jre_info.size).await?;
+        download_with_progress(&app, "jre", &platform_jre.url, &jre_archive, platform_jre.size).await?;
         let _ = app.emit(
             "agent-install-progress",
             serde_json::json!({
                 "step": "jre-extract", "downloaded": 0u64, "total": 0u64,
             }),
         );
-        extract_archive(&jre_archive, &am.base_dir().join("jre"))?;
+        extract_archive(&jre_archive, &am.jre_dir(jre_key))?;
         std::fs::remove_file(&jre_archive).ok();
     }
 
-    let driver = registry.drivers.get(&db_type).ok_or_else(|| format!("Unknown driver type: {db_type}"))?;
     let jar_path = am.driver_jar_path(&db_type);
     let _ = app.emit(
         "agent-install-progress",
@@ -109,10 +121,16 @@ pub async fn install_agent(
     download_with_progress(&app, "driver", &driver.jar.url, &jar_path, driver.jar.size).await?;
 
     let mut local_state = am.load_state();
-    local_state.jre_version = Some(registry.jre.version.clone());
+    if let Some(jre_info) = registry.resolve_jre(jre_key) {
+        local_state.jre_versions.insert(jre_key.clone(), jre_info.version.clone());
+    }
     local_state.installed_drivers.insert(
         db_type,
-        InstalledDriver { version: driver.version.clone(), installed_at: chrono::Utc::now().to_rfc3339() },
+        InstalledDriver {
+            version: driver.version.clone(),
+            installed_at: chrono::Utc::now().to_rfc3339(),
+            jre: jre_key.clone(),
+        },
     );
     am.save_state(&local_state)?;
     let _ = app.emit("agent-install-progress", serde_json::json!({ "step": "done" }));
@@ -137,8 +155,9 @@ pub async fn uninstall_agent(state: State<'_, Arc<AppState>>, db_type: String) -
 }
 
 #[tauri::command]
-pub async fn check_jre_installed(state: State<'_, Arc<AppState>>) -> Result<bool, String> {
-    Ok(state.agent_manager.is_jre_installed())
+pub async fn check_jre_installed(state: State<'_, Arc<AppState>>, jre_key: Option<String>) -> Result<bool, String> {
+    let key = jre_key.as_deref().unwrap_or(DEFAULT_JRE_KEY);
+    Ok(state.agent_manager.is_jre_installed(key))
 }
 
 #[tauri::command]
@@ -148,22 +167,28 @@ pub async fn invalidate_agent_registry_cache() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn reinstall_jre(app: tauri::AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+pub async fn reinstall_jre(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    jre_key: Option<String>,
+) -> Result<(), String> {
     let am = &state.agent_manager;
-    let jre_dir = am.base_dir().join("jre");
+    let key = jre_key.as_deref().unwrap_or(DEFAULT_JRE_KEY);
+    let jre_dir = am.jre_dir(key);
     if jre_dir.exists() {
         std::fs::remove_dir_all(&jre_dir).map_err(|e| format!("Failed to remove old JRE: {e}"))?;
     }
     let registry = fetch_registry().await?;
+    let jre_info = registry.resolve_jre(key).ok_or_else(|| format!("No JRE definition for version: {key}"))?;
     let platform = AgentManager::current_platform();
-    let jre_info =
-        registry.jre.platforms.get(platform).ok_or_else(|| format!("No JRE available for platform: {platform}"))?;
+    let platform_jre =
+        jre_info.platforms.get(platform).ok_or_else(|| format!("No JRE {key} available for platform: {platform}"))?;
     let jre_archive = am.base_dir().join("jre-download.tar.gz");
-    download_with_progress(&app, "jre", &jre_info.url, &jre_archive, jre_info.size).await?;
+    download_with_progress(&app, "jre", &platform_jre.url, &jre_archive, platform_jre.size).await?;
     extract_archive(&jre_archive, &jre_dir)?;
     std::fs::remove_file(&jre_archive).ok();
     let mut local_state = am.load_state();
-    local_state.jre_version = Some(registry.jre.version.clone());
+    local_state.jre_versions.insert(key.to_string(), jre_info.version.clone());
     am.save_state(&local_state)?;
     let _ = app.emit("agent-install-progress", serde_json::json!({ "step": "done" }));
     Ok(())

@@ -90,6 +90,12 @@ body:
       required: true
 
   - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 可直接粘贴或拖入截图。
+
+  - type: textarea
     id: expected
     attributes:
       label: 正确行为

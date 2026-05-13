@@ -6,10 +6,32 @@ use tokio::sync::Mutex;
 use crate::db::agent_driver::AgentDriverClient;
 use crate::models::connection::DatabaseType;
 
+pub const DEFAULT_JRE_KEY: &str = "17";
+
+fn default_jre_key() -> String {
+    DEFAULT_JRE_KEY.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentRegistry {
-    pub jre: JreInfo,
+    #[serde(default)]
+    pub jre: Option<JreInfo>,
+    #[serde(default)]
+    pub jres: std::collections::HashMap<String, JreInfo>,
     pub drivers: std::collections::HashMap<String, DriverInfo>,
+}
+
+impl AgentRegistry {
+    pub fn resolve_jre(&self, key: &str) -> Option<&JreInfo> {
+        if !self.jres.is_empty() {
+            return self.jres.get(key);
+        }
+        if key == DEFAULT_JRE_KEY {
+            self.jre.as_ref()
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +46,8 @@ pub struct DriverInfo {
     pub label: String,
     pub min_app_version: String,
     pub jar: ArtifactInfo,
+    #[serde(default = "default_jre_key")]
+    pub jre: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +62,8 @@ pub struct AgentState {
     #[serde(default)]
     pub jre_version: Option<String>,
     #[serde(default)]
+    pub jre_versions: std::collections::HashMap<String, String>,
+    #[serde(default)]
     pub installed_drivers: std::collections::HashMap<String, InstalledDriver>,
 }
 
@@ -45,6 +71,8 @@ pub struct AgentState {
 pub struct InstalledDriver {
     pub version: String,
     pub installed_at: String,
+    #[serde(default = "default_jre_key")]
+    pub jre: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +84,8 @@ pub struct AgentDriverInfo {
     pub installed: bool,
     pub installed_version: Option<String>,
     pub update_available: bool,
+    pub jre: String,
+    pub jre_installed: bool,
 }
 
 pub struct AgentManager {
@@ -67,9 +97,19 @@ impl AgentManager {
     pub fn new() -> Self {
         let home =
             std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_else(|_| ".".to_string());
-        Self {
+        let mgr = Self {
             base_dir: PathBuf::from(home).join(".dbx").join("agents"),
             daemons: Mutex::new(std::collections::HashMap::new()),
+        };
+        mgr.migrate_legacy_jre();
+        mgr
+    }
+
+    fn migrate_legacy_jre(&self) {
+        let legacy = self.base_dir.join("jre");
+        let versioned = self.jre_dir(DEFAULT_JRE_KEY);
+        if legacy.exists() && !versioned.exists() {
+            let _ = std::fs::rename(&legacy, &versioned);
         }
     }
 
@@ -77,11 +117,16 @@ impl AgentManager {
         &self.base_dir
     }
 
-    pub fn jre_java_path(&self) -> PathBuf {
+    pub fn jre_dir(&self, jre_key: &str) -> PathBuf {
+        self.base_dir.join(format!("jre-{jre_key}"))
+    }
+
+    pub fn jre_java_path(&self, jre_key: &str) -> PathBuf {
+        let dir = self.jre_dir(jre_key);
         if cfg!(windows) {
-            self.base_dir.join("jre").join("bin").join("java.exe")
+            dir.join("bin").join("java.exe")
         } else {
-            self.base_dir.join("jre").join("bin").join("java")
+            dir.join("bin").join("java")
         }
     }
 
@@ -94,10 +139,9 @@ impl AgentManager {
     }
 
     pub fn load_state(&self) -> AgentState {
-        std::fs::read_to_string(self.state_path())
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or(AgentState { jre_version: None, installed_drivers: Default::default() })
+        std::fs::read_to_string(self.state_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(
+            AgentState { jre_version: None, jre_versions: Default::default(), installed_drivers: Default::default() },
+        )
     }
 
     pub fn save_state(&self, state: &AgentState) -> Result<(), String> {
@@ -107,8 +151,8 @@ impl AgentManager {
         std::fs::write(self.state_path(), json).map_err(|e| e.to_string())
     }
 
-    pub fn is_jre_installed(&self) -> bool {
-        self.jre_java_path().exists()
+    pub fn is_jre_installed(&self, jre_key: &str) -> bool {
+        self.jre_java_path(jre_key).exists()
     }
 
     pub fn is_driver_installed(&self, db_type: &str) -> bool {
@@ -146,14 +190,17 @@ impl AgentManager {
         let key = Self::db_type_to_agent_key(db_type)
             .ok_or_else(|| format!("{:?} is not an agent-driven database type", db_type))?;
 
-        if !self.is_jre_installed() {
-            return Err("JRE runtime is not installed. Please install it from the Driver Manager.".to_string());
+        let state = self.load_state();
+        let jre_key = state.installed_drivers.get(key).map(|d| d.jre.as_str()).unwrap_or(DEFAULT_JRE_KEY);
+
+        if !self.is_jre_installed(jre_key) {
+            return Err(format!("JRE {jre_key} runtime is not installed. Please install it from the Driver Manager."));
         }
         if !self.is_driver_installed(key) {
             return Err(format!("{key} driver is not installed. Please install it from the Driver Manager."));
         }
 
-        let java = self.jre_java_path().to_string_lossy().to_string();
+        let java = self.jre_java_path(jre_key).to_string_lossy().to_string();
         let jar = self.driver_jar_path(key).to_string_lossy().to_string();
         AgentDriverClient::spawn(&java, &jar).await
     }
@@ -171,13 +218,18 @@ impl AgentManager {
         let mut daemons = self.daemons.lock().await;
 
         if !daemons.contains_key(&key) {
-            if !self.is_jre_installed() {
-                return Err("JRE runtime is not installed. Please install it from the Driver Manager.".to_string());
+            let state = self.load_state();
+            let jre_key = state.installed_drivers.get(&key).map(|d| d.jre.as_str()).unwrap_or(DEFAULT_JRE_KEY);
+
+            if !self.is_jre_installed(jre_key) {
+                return Err(format!(
+                    "JRE {jre_key} runtime is not installed. Please install it from the Driver Manager."
+                ));
             }
             if !self.is_driver_installed(&key) {
                 return Err(format!("{key} driver is not installed. Please install it from the Driver Manager."));
             }
-            let java = self.jre_java_path().to_string_lossy().to_string();
+            let java = self.jre_java_path(jre_key).to_string_lossy().to_string();
             let jar = self.driver_jar_path(&key).to_string_lossy().to_string();
             let client = AgentDriverClient::spawn(&java, &jar).await?;
             daemons.insert(key.clone(), client);
@@ -189,7 +241,9 @@ impl AgentManager {
             Err(e) => {
                 log::warn!("[agent] daemon call failed, respawning: {e}");
                 daemons.remove(&key);
-                let java = self.jre_java_path().to_string_lossy().to_string();
+                let state = self.load_state();
+                let jre_key = state.installed_drivers.get(&key).map(|d| d.jre.as_str()).unwrap_or(DEFAULT_JRE_KEY);
+                let java = self.jre_java_path(jre_key).to_string_lossy().to_string();
                 let jar = self.driver_jar_path(&key).to_string_lossy().to_string();
                 let mut new_client = AgentDriverClient::spawn(&java, &jar).await?;
                 let result = new_client.call::<T>(method, params).await?;

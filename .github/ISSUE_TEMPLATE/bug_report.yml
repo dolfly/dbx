@@ -133,10 +133,16 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: 错误日志 / 截图
-      description: 可粘贴终端、DevTools、Tauri/Rust 日志，或直接拖入截图。
+      label: 错误日志
+      description: 粘贴终端、DevTools、Tauri/Rust 日志。
       render: shell
-      placeholder: "请粘贴错误堆栈、控制台输出或截图。"
+      placeholder: "请粘贴错误堆栈或控制台输出。"
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 可直接粘贴或拖入截图。
 
   - type: input
     id: app-version
