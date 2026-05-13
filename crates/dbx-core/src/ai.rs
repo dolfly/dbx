@@ -4,25 +4,24 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock};
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 
 // ---------------------------------------------------------------------------
 // Stream cancel registry
 // ---------------------------------------------------------------------------
 
-static AI_STREAMS: LazyLock<RwLock<HashMap<String, Arc<AtomicBool>>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static AI_STREAMS: LazyLock<RwLock<HashMap<String, Arc<Notify>>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
 
-pub async fn register_stream(session_id: &str) -> Arc<AtomicBool> {
-    let cancelled = Arc::new(AtomicBool::new(false));
-    AI_STREAMS.write().await.insert(session_id.to_string(), cancelled.clone());
-    cancelled
+pub async fn register_stream(session_id: &str) -> Arc<Notify> {
+    let notify = Arc::new(Notify::new());
+    AI_STREAMS.write().await.insert(session_id.to_string(), notify.clone());
+    notify
 }
 
 pub async fn cancel_stream(session_id: &str) -> bool {
-    if let Some(flag) = AI_STREAMS.read().await.get(session_id) {
-        flag.store(true, Ordering::Relaxed);
+    if let Some(notify) = AI_STREAMS.read().await.get(session_id) {
+        notify.notify_one();
         true
     } else {
         false
@@ -410,7 +409,7 @@ pub async fn complete(request: &AiCompletionRequest) -> Result<String, String> {
 pub async fn stream(
     session_id: &str,
     request: &AiCompletionRequest,
-    cancelled: &AtomicBool,
+    cancelled: &Notify,
     on_chunk: impl Fn(AiStreamChunk),
 ) -> Result<(), String> {
     validate_config(&request.config)?;
@@ -433,7 +432,7 @@ async fn stream_claude(
     client: &reqwest::Client,
     session_id: &str,
     request: &AiCompletionRequest,
-    cancelled: &AtomicBool,
+    cancelled: &Notify,
     on_chunk: &impl Fn(AiStreamChunk),
 ) -> Result<(), String> {
     let mut headers = HeaderMap::new();
@@ -466,40 +465,39 @@ async fn stream_claude(
     let mut byte_stream = res.bytes_stream();
     let mut buf = String::new();
 
-    let mut finished = false;
-    while let Some(chunk) = byte_stream.next().await {
-        if cancelled.load(Ordering::Relaxed) {
-            break;
-        }
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        buf.push_str(&String::from_utf8_lossy(&chunk));
+    loop {
+        tokio::select! {
+            chunk = byte_stream.next() => {
+                let Some(chunk) = chunk else { break };
+                let chunk = chunk.map_err(|e| e.to_string())?;
+                buf.push_str(&String::from_utf8_lossy(&chunk));
 
-        while let Some(pos) = buf.find('\n') {
-            let line = buf[..pos].to_string();
-            buf = buf[pos + 1..].to_string();
+                let mut finished = false;
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].to_string();
+                    buf = buf[pos + 1..].to_string();
 
-            let Some(data) = stream_data_payload(&line) else {
-                continue;
-            };
-            if data == "[DONE]" {
-                finished = true;
-                break;
-            }
+                    let Some(data) = stream_data_payload(&line) else { continue };
+                    if data == "[DONE]" {
+                        finished = true;
+                        break;
+                    }
 
-            if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                if let Some(text) = claude_stream_text(&event) {
-                    on_chunk(AiStreamChunk {
-                        session_id: session_id.to_string(),
-                        delta: text.to_string(),
-                        reasoning_delta: None,
-                        done: false,
-                    });
+                    if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(text) = claude_stream_text(&event) {
+                            on_chunk(AiStreamChunk {
+                                session_id: session_id.to_string(),
+                                delta: text.to_string(),
+                                reasoning_delta: None,
+                                done: false,
+                            });
+                        }
+                    }
                 }
-            }
-        }
 
-        if finished {
-            break;
+                if finished { break; }
+            }
+            _ = cancelled.notified() => { break; }
         }
     }
 
@@ -517,7 +515,7 @@ async fn stream_openai(
     client: &reqwest::Client,
     session_id: &str,
     request: &AiCompletionRequest,
-    cancelled: &AtomicBool,
+    cancelled: &Notify,
     on_chunk: &impl Fn(AiStreamChunk),
 ) -> Result<(), String> {
     let mut headers = HeaderMap::new();
@@ -559,48 +557,47 @@ async fn stream_openai(
     let mut byte_stream = res.bytes_stream();
     let mut buf = String::new();
 
-    let mut finished = false;
-    while let Some(chunk) = byte_stream.next().await {
-        if cancelled.load(Ordering::Relaxed) {
-            break;
-        }
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        buf.push_str(&String::from_utf8_lossy(&chunk));
+    loop {
+        tokio::select! {
+            chunk = byte_stream.next() => {
+                let Some(chunk) = chunk else { break };
+                let chunk = chunk.map_err(|e| e.to_string())?;
+                buf.push_str(&String::from_utf8_lossy(&chunk));
 
-        while let Some(pos) = buf.find('\n') {
-            let line = buf[..pos].to_string();
-            buf = buf[pos + 1..].to_string();
+                let mut finished = false;
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].to_string();
+                    buf = buf[pos + 1..].to_string();
 
-            let Some(data) = stream_data_payload(&line) else {
-                continue;
-            };
-            if data == "[DONE]" {
-                finished = true;
-                break;
-            }
+                    let Some(data) = stream_data_payload(&line) else { continue };
+                    if data == "[DONE]" {
+                        finished = true;
+                        break;
+                    }
 
-            if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                if let Some(reasoning) = openai_stream_reasoning(&event) {
-                    on_chunk(AiStreamChunk {
-                        session_id: session_id.to_string(),
-                        delta: String::new(),
-                        reasoning_delta: Some(reasoning.to_string()),
-                        done: false,
-                    });
+                    if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(reasoning) = openai_stream_reasoning(&event) {
+                            on_chunk(AiStreamChunk {
+                                session_id: session_id.to_string(),
+                                delta: String::new(),
+                                reasoning_delta: Some(reasoning.to_string()),
+                                done: false,
+                            });
+                        }
+                        if let Some(text) = openai_stream_text(&event) {
+                            on_chunk(AiStreamChunk {
+                                session_id: session_id.to_string(),
+                                delta: text.to_string(),
+                                reasoning_delta: None,
+                                done: false,
+                            });
+                        }
+                    }
                 }
-                if let Some(text) = openai_stream_text(&event) {
-                    on_chunk(AiStreamChunk {
-                        session_id: session_id.to_string(),
-                        delta: text.to_string(),
-                        reasoning_delta: None,
-                        done: false,
-                    });
-                }
-            }
-        }
 
-        if finished {
-            break;
+                if finished { break; }
+            }
+            _ = cancelled.notified() => { break; }
         }
     }
 
@@ -618,7 +615,7 @@ async fn stream_responses_api(
     client: &reqwest::Client,
     session_id: &str,
     request: &AiCompletionRequest,
-    cancelled: &AtomicBool,
+    cancelled: &Notify,
     on_chunk: &impl Fn(AiStreamChunk),
 ) -> Result<(), String> {
     let mut headers = HeaderMap::new();
@@ -652,40 +649,39 @@ async fn stream_responses_api(
     let mut byte_stream = res.bytes_stream();
     let mut buf = String::new();
 
-    let mut finished = false;
-    while let Some(chunk) = byte_stream.next().await {
-        if cancelled.load(Ordering::Relaxed) {
-            break;
-        }
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        buf.push_str(&String::from_utf8_lossy(&chunk));
+    loop {
+        tokio::select! {
+            chunk = byte_stream.next() => {
+                let Some(chunk) = chunk else { break };
+                let chunk = chunk.map_err(|e| e.to_string())?;
+                buf.push_str(&String::from_utf8_lossy(&chunk));
 
-        while let Some(pos) = buf.find('\n') {
-            let line = buf[..pos].to_string();
-            buf = buf[pos + 1..].to_string();
+                let mut finished = false;
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].to_string();
+                    buf = buf[pos + 1..].to_string();
 
-            let Some(data) = stream_data_payload(&line) else {
-                continue;
-            };
-            if data == "[DONE]" {
-                finished = true;
-                break;
-            }
+                    let Some(data) = stream_data_payload(&line) else { continue };
+                    if data == "[DONE]" {
+                        finished = true;
+                        break;
+                    }
 
-            if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                if let Some(text) = responses_stream_text(&event) {
-                    on_chunk(AiStreamChunk {
-                        session_id: session_id.to_string(),
-                        delta: text.to_string(),
-                        reasoning_delta: None,
-                        done: false,
-                    });
+                    if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(text) = responses_stream_text(&event) {
+                            on_chunk(AiStreamChunk {
+                                session_id: session_id.to_string(),
+                                delta: text.to_string(),
+                                reasoning_delta: None,
+                                done: false,
+                            });
+                        }
+                    }
                 }
-            }
-        }
 
-        if finished {
-            break;
+                if finished { break; }
+            }
+            _ = cancelled.notified() => { break; }
         }
     }
 
