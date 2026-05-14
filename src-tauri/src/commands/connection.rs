@@ -81,12 +81,29 @@ pub async fn test_connection(state: State<'_, Arc<AppState>>, config: Connection
             DatabaseType::DuckDb => duckdb::Connection::open(&expand_tilde(&config.host))
                 .map(|_| "Connection successful".to_string())
                 .map_err(|e| e.to_string()),
-            DatabaseType::MongoDb => match db::mongo_driver::connect(&url).await {
-                Ok(client) => {
-                    db::mongo_driver::test_connection(&client).await.map(|_| "Connection successful".to_string())
+            DatabaseType::MongoDb => {
+                let native_err = match db::mongo_driver::connect(&url).await {
+                    Ok(client) => match db::mongo_driver::test_connection(&client).await {
+                        Ok(()) => return Ok("Connection successful".to_string()),
+                        Err(e) => e,
+                    },
+                    Err(e) => e,
+                };
+                if native_err.contains("wire version") {
+                    let am = &state.agent_manager;
+                    let mut client = am.spawn(&config.db_type, config.driver_profile.as_deref()).await?;
+                    let params = serde_json::json!({ "connection": {
+                        "host": host, "port": port,
+                        "database": config.effective_database().unwrap_or(""),
+                        "username": config.username, "password": config.password,
+                    }});
+                    client.call::<serde_json::Value>("connect", params).await?;
+                    client.call::<serde_json::Value>("disconnect", serde_json::json!({})).await.ok();
+                    Ok("Connection successful (via legacy driver)".to_string())
+                } else {
+                    Err(native_err)
                 }
-                Err(e) => Err(e.to_string()),
-            },
+            }
             DatabaseType::ClickHouse => {
                 let username = if config.username.is_empty() { None } else { Some(config.username.clone()) };
                 let password = if config.password.is_empty() { None } else { Some(config.password.clone()) };
@@ -170,9 +187,31 @@ pub async fn connect_db(state: State<'_, Arc<AppState>>, config: ConnectionConfi
             PoolKind::DuckDb(std::sync::Arc::new(std::sync::Mutex::new(con)))
         }
         DatabaseType::MongoDb => {
-            let client = db::mongo_driver::connect(&url).await?;
-            db::mongo_driver::test_connection(&client).await?;
-            PoolKind::MongoDb(client)
+            let native_err = match db::mongo_driver::connect(&url).await {
+                Ok(client) => match db::mongo_driver::test_connection(&client).await {
+                    Ok(()) => {
+                        state.configs.write().await.insert(id.clone(), config);
+                        state.connections.write().await.insert(id.clone(), PoolKind::MongoDb(client));
+                        return Ok(id);
+                    }
+                    Err(e) => e,
+                },
+                Err(e) => e,
+            };
+            if native_err.contains("wire version") {
+                log::info!("Native MongoDB driver failed ({native_err}), falling back to agent driver");
+                let mut client =
+                    state.agent_manager.spawn(&db_config.db_type, db_config.driver_profile.as_deref()).await?;
+                let params = serde_json::json!({ "connection": {
+                    "host": host, "port": port,
+                    "database": db_config.effective_database().unwrap_or(""),
+                    "username": db_config.username, "password": db_config.password,
+                }});
+                client.call::<serde_json::Value>("connect", params).await?;
+                PoolKind::Agent(std::sync::Arc::new(tokio::sync::Mutex::new(client)))
+            } else {
+                return Err(native_err);
+            }
         }
         DatabaseType::ClickHouse => {
             let username = if db_config.username.is_empty() { None } else { Some(db_config.username.clone()) };

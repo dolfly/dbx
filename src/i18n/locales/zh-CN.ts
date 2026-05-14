@@ -176,8 +176,7 @@ export default {
     jdbcPluginHint: "先安装 DBX JDBC 插件，再导入数据库厂商提供的 JDBC 驱动 JAR。",
     dmCompatHint: "需要在系统上安装达梦 DM8 ODBC 驱动程序。",
     dmDownload: "前往达梦官网下载",
-    mongoLegacyHint:
-      "连接旧版 MongoDB 时，可在此填写 authSource=admin&authMechanism=SCRAM-SHA-1；直连单节点时可按需追加 directConnection=true。",
+    mongoLegacyHint: "MongoDB 4.2 以下版本需在驱动管理中安装 MongoDB (Legacy) 驱动，连接时将自动切换。",
     compatible: "兼容",
     mainstream: "主流",
     color: "颜色",

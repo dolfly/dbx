@@ -180,7 +180,7 @@ export default {
     dmCompatHint: "Requiere el driver ODBC DM8 instalado en el sistema.",
     dmDownload: "Descargar desde Dameng",
     mongoLegacyHint:
-      "Para servidores MongoDB más antiguos, ingresa authSource=admin&authMechanism=SCRAM-SHA-1 aquí; agrega directConnection=true solo cuando sea necesario para conexiones directas a instancias independientes.",
+      "MongoDB inferior a 4.2 requiere el controlador MongoDB (Legacy) del Gestor de controladores; la conexión cambiará automáticamente.",
     compatible: "Compatible",
     mainstream: "Popular",
     color: "Color",

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::connection::{AppState, MysqlMode, PoolKind};
 use crate::db;
+use crate::models::connection::DatabaseType;
 
 pub fn duckdb_query_tables(con: &duckdb::Connection) -> Result<Vec<db::TableInfo>, String> {
     let mut stmt = con.prepare(
@@ -136,6 +137,13 @@ pub async fn list_databases_core(state: &AppState, connection_id: &str) -> Resul
             return db::sqlserver::list_databases(&mut client).await;
         }
         if let Some(client) = extract_agent(&connections, connection_id) {
+            let is_mongo =
+                state.configs.read().await.get(connection_id).is_some_and(|c| c.db_type == DatabaseType::MongoDb);
+            if is_mongo {
+                drop(connections);
+                let dbs = crate::mongo_ops::mongo_list_databases_core(state, connection_id).await?;
+                return Ok(dbs.into_iter().map(|name| db::DatabaseInfo { name }).collect());
+            }
             drop(connections);
             let mut client = client.lock().await;
             return client.call("list_databases", serde_json::json!({})).await;
