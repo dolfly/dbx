@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildExecutableObjectSourceSql,
   buildExecutableObjectSourceStatements,
+  objectSourceReadOnlyReason,
   objectSourceSaveExecutionMode,
 } from "../../apps/desktop/src/lib/objectSourceEditor.ts";
 
@@ -102,5 +103,39 @@ test("object source SQL joins generated save statements for previews", () => {
   assert.equal(
     sql,
     'CREATE OR REPLACE PROCEDURE "public"."refresh_cache_v2"(mode text)\nLANGUAGE SQL\nAS $$ SELECT 1 $$;\nDROP PROCEDURE IF EXISTS "public"."refresh_cache"(mode text);',
+  );
+});
+
+test("system schemas open object source as read-only", () => {
+  assert.equal(
+    objectSourceReadOnlyReason({
+      databaseType: "oracle",
+      schema: "SYS",
+      name: "DBMS_STATS",
+      objectType: "PROCEDURE",
+    }),
+    "system-object",
+  );
+});
+
+test("Dameng built-in maintenance routines open as read-only without blocking user SP names", () => {
+  assert.equal(
+    objectSourceReadOnlyReason({
+      databaseType: "dameng",
+      schema: "SYSDBA",
+      name: "SP_TS_BAKSET_REMOVE_BATCH",
+      objectType: "PROCEDURE",
+    }),
+    "system-object",
+  );
+
+  assert.equal(
+    objectSourceReadOnlyReason({
+      databaseType: "dameng",
+      schema: "SYSDBA",
+      name: "SP_HELLO",
+      objectType: "PROCEDURE",
+    }),
+    null,
   );
 });

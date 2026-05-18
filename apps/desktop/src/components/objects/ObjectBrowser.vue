@@ -34,7 +34,11 @@ import type { ConnectionConfig, ObjectInfo, ObjectSourceKind } from "@/types/dat
 import { isSchemaAware } from "@/lib/databaseCapabilities";
 import { buildTableSelectSql, qualifiedTableName } from "@/lib/tableSelectSql";
 import { useToast } from "@/composables/useToast";
-import { buildExecutableObjectSourceStatements, objectSourceSaveExecutionMode } from "@/lib/objectSourceEditor";
+import {
+  buildExecutableObjectSourceStatements,
+  objectSourceReadOnlyReason,
+  objectSourceSaveExecutionMode,
+} from "@/lib/objectSourceEditor";
 import { buildRenameObjectSql, supportsObjectRename } from "@/lib/objectRenameSql";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useQueryStore } from "@/stores/queryStore";
@@ -108,6 +112,7 @@ const sourceFormatDialect = computed<SqlFormatDialect>(() => {
       return "generic";
   }
 });
+const sourceRowReadOnlyReason = computed(() => (sourceRow.value ? readOnlyReasonForRow(sourceRow.value) : null));
 const objectFilters = computed<ObjectFilter[]>(() =>
   (
     [
@@ -169,7 +174,17 @@ function canOpenSource(row: ObjectBrowserRow) {
 }
 
 function canRename(row: ObjectBrowserRow) {
-  return supportsObjectRename(props.connection.db_type, row.type);
+  return !readOnlyReasonForRow(row) && supportsObjectRename(props.connection.db_type, row.type);
+}
+
+function readOnlyReasonForRow(row: ObjectBrowserRow) {
+  if (row.type !== "VIEW" && row.type !== "PROCEDURE" && row.type !== "FUNCTION") return null;
+  return objectSourceReadOnlyReason({
+    databaseType: props.connection.db_type,
+    schema: row.schema || selectedSchema.value || props.database,
+    name: row.name,
+    objectType: row.type,
+  });
 }
 
 function sourceTitle(row: ObjectBrowserRow | null) {
@@ -205,7 +220,7 @@ async function openSource(row: ObjectBrowserRow) {
     );
     sourceContent.value = result.source;
     sourceDraft.value = result.source;
-    sourceEditing.value = true;
+    sourceEditing.value = !readOnlyReasonForRow(row);
   } catch (e: any) {
     sourceError.value = e?.message || String(e);
   } finally {
@@ -235,11 +250,19 @@ function qualifiedName(row: ObjectBrowserRow): string {
 }
 
 function requestDrop(row: ObjectBrowserRow) {
+  if (readOnlyReasonForRow(row)) {
+    toast(t("objects.sourceReadOnlySystemObject"), 5000);
+    return;
+  }
   dropTarget.value = row;
   showDropConfirm.value = true;
 }
 
 function requestRename(row: ObjectBrowserRow) {
+  if (readOnlyReasonForRow(row)) {
+    toast(t("objects.sourceReadOnlySystemObject"), 5000);
+    return;
+  }
   renameTarget.value = row;
   renameInput.value = row.name;
   renameError.value = "";
@@ -267,6 +290,10 @@ async function confirmRename() {
   const row = renameTarget.value;
   const newName = renameInput.value.trim();
   if (!row || !newName || newName === row.name) return;
+  if (readOnlyReasonForRow(row)) {
+    renameError.value = t("objects.sourceReadOnlySystemObject");
+    return;
+  }
   renameError.value = "";
   try {
     const schema = row.schema || selectedSchema.value || props.database;
@@ -295,6 +322,11 @@ async function confirmRename() {
 async function confirmDrop() {
   if (!dropTarget.value) return;
   const row = dropTarget.value;
+  if (readOnlyReasonForRow(row)) {
+    toast(t("objects.sourceReadOnlySystemObject"), 5000);
+    dropTarget.value = null;
+    return;
+  }
   const typeSql =
     row.type === "VIEW"
       ? "VIEW"
@@ -363,6 +395,10 @@ function copySource() {
 
 function editSource() {
   if (!sourceRow.value || !sourceContent.value) return;
+  if (sourceRowReadOnlyReason.value) {
+    toast(t("objects.sourceReadOnlySystemObject"), 5000);
+    return;
+  }
   sourceDraft.value = sourceContent.value;
   sourceSaveError.value = "";
   sourceEditing.value = true;
@@ -376,6 +412,10 @@ function cancelEditSource() {
 
 async function saveSource() {
   if (!sourceRow.value || !sourceDraft.value.trim()) return;
+  if (sourceRowReadOnlyReason.value) {
+    toast(t("objects.sourceReadOnlySystemObject"), 5000);
+    return;
+  }
   const row = sourceRow.value;
   const schema = row.schema || selectedSchema.value || props.database;
   sourceSaving.value = true;
@@ -651,11 +691,13 @@ watch(
                 <ContextMenuItem v-if="canRename(item)" @click="requestRename(item)">
                   <Pencil class="w-4 h-4 mr-2" /> {{ t("contextMenu.renameObject") }}
                 </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem class="text-destructive" @click="requestDrop(item)">
-                  <Trash2 class="w-4 h-4 mr-2" />
-                  {{ item.type === "PROCEDURE" ? t("contextMenu.dropProcedure") : t("contextMenu.dropFunction") }}
-                </ContextMenuItem>
+                <template v-if="!readOnlyReasonForRow(item)">
+                  <ContextMenuSeparator />
+                  <ContextMenuItem class="text-destructive" @click="requestDrop(item)">
+                    <Trash2 class="w-4 h-4 mr-2" />
+                    {{ item.type === "PROCEDURE" ? t("contextMenu.dropProcedure") : t("contextMenu.dropFunction") }}
+                  </ContextMenuItem>
+                </template>
               </template>
             </ContextMenuContent>
           </ContextMenu>
@@ -701,7 +743,8 @@ watch(
             variant="ghost"
             size="icon"
             class="h-5 w-5"
-            :disabled="!sourceContent"
+            :disabled="!sourceContent || !!sourceRowReadOnlyReason"
+            :title="sourceRowReadOnlyReason ? t('objects.sourceReadOnlySystemObject') : undefined"
             @click="editSource"
           >
             <PencilLine class="h-3 w-3" />
@@ -724,6 +767,7 @@ watch(
             :database="props.database"
             :dialect="sourceDialect"
             :format-dialect="sourceFormatDialect"
+            :read-only="!!sourceRowReadOnlyReason"
             force-word-wrap
             @save="saveSource"
           />

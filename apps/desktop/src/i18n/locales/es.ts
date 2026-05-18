@@ -663,6 +663,7 @@ export default {
     cancelEdit: "Cancelar",
     sourceSaved: "Código fuente guardado",
     sourceSaveFailed: "Error al guardar el código fuente: {message}",
+    sourceReadOnlySystemObject: "Los objetos del sistema están protegidos y no se pueden modificar ni eliminar",
     schemaColumn: "Esquema",
     comment: "Comentario",
     loadingSchemas: "Cargando esquemas...",

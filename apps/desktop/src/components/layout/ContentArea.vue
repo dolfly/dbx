@@ -28,6 +28,7 @@ const ExplainPlanViewer = defineAsyncComponent(() => import("@/components/explai
 const QueryChart = defineAsyncComponent(() => import("@/components/chart/QueryChart.vue"));
 import { useQueryStore } from "@/stores/queryStore";
 import { canCancelQueryExecution, queryExecutionLabelKey } from "@/lib/queryExecutionState";
+import { shouldShowQueryOutputPane } from "@/lib/contentAreaLayout";
 import { databaseDisplayNameForTab } from "@/lib/tabPresentation";
 import { isTableDataEditable } from "@/lib/tableEditing";
 import type { QueryTab, ConnectionConfig } from "@/types/database";
@@ -113,6 +114,9 @@ const activeQueryError = computed(() => {
   if (!result?.columns.includes("Error")) return "";
   return String(result.rows[0]?.[0] ?? "");
 });
+
+const showQueryOutputPane = computed(() => shouldShowQueryOutputPane(props.activeTab));
+const objectSourceReadOnly = computed(() => !!props.activeTab.objectSource?.readOnlyReason);
 
 // Column info panel handlers
 async function onHandleClickColumn(
@@ -202,7 +206,7 @@ defineExpose({ focusSearch });
     <!-- Query mode: editor + results -->
     <template v-if="activeTab.mode === 'query'">
       <Splitpanes horizontal class="flex-1">
-        <Pane :size="40" :min-size="15">
+        <Pane :size="showQueryOutputPane ? 40 : 100" :min-size="showQueryOutputPane ? 15 : 100">
           <div class="h-full flex flex-col relative">
             <QueryEditor
               class="flex-1"
@@ -213,6 +217,7 @@ defineExpose({ focusSearch });
               :format-dialect="activeSqlFormatDialect"
               :format-request-id="formatSqlRequestId"
               :execution-error="activeQueryError"
+              :read-only="objectSourceReadOnly"
               @update:model-value="emit('editorUpdate', $event)"
               @selection-change="emit('editorSelectionChange', $event)"
               @cursor-change="emit('editorCursorChange', $event)"
@@ -232,7 +237,7 @@ defineExpose({ focusSearch });
             />
           </div>
         </Pane>
-        <Pane :size="60" :min-size="20">
+        <Pane v-if="showQueryOutputPane" :size="60" :min-size="20">
           <div class="h-full flex flex-col">
             <div
               v-if="

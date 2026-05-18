@@ -65,7 +65,11 @@ const activeConnectionValue = computed(() => props.activeConnection?.id || "");
 const activeSchemaValue = computed(() => props.activeTab.schema || "");
 const isSingleDb = computed(() => isSingleDatabase(props.activeConnection?.db_type));
 const schemaDatabaseKey = computed(() => props.activeTab.database || (isSingleDb.value ? "_" : ""));
-const saveTooltip = computed(() => (props.activeTab.objectSource ? t("objects.saveSource") : t("toolbar.saveSql")));
+const objectSourceReadOnly = computed(() => !!props.activeTab.objectSource?.readOnlyReason);
+const saveTooltip = computed(() => {
+  if (objectSourceReadOnly.value) return t("objects.sourceReadOnlySystemObject");
+  return props.activeTab.objectSource ? t("objects.saveSource") : t("toolbar.saveSql");
+});
 
 const showSchemaSelector = computed(() => {
   const connection = props.activeConnection;
@@ -124,7 +128,10 @@ function connectionById(connectionId: string): ConnectionConfig | undefined {
                 : 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200'
             "
             :disabled="
-              activeTab.isCancelling || activeTab.isExplaining || (!activeTab.isExecuting && !executableSql.trim())
+              objectSourceReadOnly ||
+              activeTab.isCancelling ||
+              activeTab.isExplaining ||
+              (!activeTab.isExecuting && !executableSql.trim())
             "
             @click="activeTab.isExecuting ? emit('cancel') : emit('execute')"
           >
@@ -148,7 +155,9 @@ function connectionById(connectionId: string): ConnectionConfig | undefined {
                 ? ''
                 : 'text-violet-600 hover:bg-violet-500/10 hover:text-violet-700 dark:text-violet-300 dark:hover:text-violet-200'
             "
-            :disabled="activeTab.isExecuting || (!activeTab.isExplaining && !executableSql.trim())"
+            :disabled="
+              objectSourceReadOnly || activeTab.isExecuting || (!activeTab.isExplaining && !executableSql.trim())
+            "
             @click="activeTab.isExplaining ? emit('cancel') : emit('explain')"
           >
             <Square v-if="activeTab.isExplaining" class="h-3.5 w-3.5 fill-current" />
@@ -165,7 +174,7 @@ function connectionById(connectionId: string): ConnectionConfig | undefined {
             variant="ghost"
             size="icon"
             class="h-6 w-6 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200"
-            :disabled="activeTab.isExecuting || activeTab.isExplaining || !activeTab.sql.trim()"
+            :disabled="objectSourceReadOnly || activeTab.isExecuting || activeTab.isExplaining || !activeTab.sql.trim()"
             @click="emit('formatSql')"
           >
             <AlignLeft class="h-3.5 w-3.5" />
@@ -179,7 +188,7 @@ function connectionById(connectionId: string): ConnectionConfig | undefined {
             variant="ghost"
             size="icon"
             class="h-6 w-6 text-blue-600 hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-            :disabled="!activeTab.sql.trim()"
+            :disabled="objectSourceReadOnly || !activeTab.sql.trim()"
             @click="emit('saveSql')"
           >
             <Save class="h-3.5 w-3.5" />

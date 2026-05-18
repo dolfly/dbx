@@ -9,6 +9,14 @@ type BuildEditableObjectSourceSqlInput = {
 };
 
 export type ObjectSourceSaveExecutionMode = "single" | "script";
+export type ObjectSourceReadOnlyReason = "system-object";
+
+type ObjectSourceReadOnlyInput = {
+  databaseType: DatabaseType;
+  schema?: string | null;
+  name: string;
+  objectType: ObjectSourceKind;
+};
 
 const postgresLikeRoutineRenameTypes = new Set<DatabaseType>([
   "postgres",
@@ -97,4 +105,38 @@ export function buildExecutableObjectSourceSql(input: BuildEditableObjectSourceS
 
 export function objectSourceSaveExecutionMode(_databaseType: DatabaseType): ObjectSourceSaveExecutionMode {
   return "single";
+}
+
+const readOnlySystemSchemas = new Set([
+  "information_schema",
+  "pg_catalog",
+  "sys",
+  "system",
+  "mysql",
+  "performance_schema",
+  "xdb",
+  "outln",
+  "dbsnmp",
+  "ctisys",
+  "sysauditor",
+  "syssso",
+]);
+
+const damengSysdbaRoutinePrefixes = ["SP_TS_", "SP_ARCH_", "SP_DB_", "SP_DROP_CONS_", "SP_TAB_", "SP_UPDATE_SYS"];
+
+export function objectSourceReadOnlyReason(input: ObjectSourceReadOnlyInput): ObjectSourceReadOnlyReason | null {
+  const schema = input.schema?.trim().toLowerCase();
+  if (schema && readOnlySystemSchemas.has(schema)) return "system-object";
+
+  const name = input.name.trim().toUpperCase();
+  if (
+    input.databaseType === "dameng" &&
+    input.schema?.trim().toUpperCase() === "SYSDBA" &&
+    (input.objectType === "PROCEDURE" || input.objectType === "FUNCTION") &&
+    damengSysdbaRoutinePrefixes.some((prefix) => name.startsWith(prefix))
+  ) {
+    return "system-object";
+  }
+
+  return null;
 }

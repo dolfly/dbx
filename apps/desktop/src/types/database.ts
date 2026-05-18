@@ -290,6 +290,7 @@ export interface QueryTab {
     schema?: string;
     name: string;
     objectType: ObjectSourceKind;
+    readOnlyReason?: "system-object";
   };
   tableMeta?: {
     schema?: string;

@@ -739,6 +739,7 @@ export default {
     cancelEdit: "取消",
     sourceSaved: "源码已保存",
     sourceSaveFailed: "保存源码失败：{message}",
+    sourceReadOnlySystemObject: "系统对象受保护，不能修改或删除",
     schemaColumn: "Schema",
     comment: "注释",
     loadingSchemas: "加载 Schema...",
