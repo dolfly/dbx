@@ -446,7 +446,7 @@ watch(
                       <th class="min-w-40 border-b border-r px-2 py-2 text-left">
                         {{ t("structureEditor.dataType") }}
                       </th>
-                      <th class="w-20 border-b border-r px-2 py-2 text-left">
+                      <th class="w-20 whitespace-nowrap border-b border-r px-2 py-2 text-left">
                         {{ t("structureEditor.nullable") }}
                       </th>
                       <th class="min-w-32 border-b border-r px-2 py-2 text-left">
