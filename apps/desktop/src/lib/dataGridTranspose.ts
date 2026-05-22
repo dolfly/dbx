@@ -18,6 +18,7 @@ export interface DataGridTransposeCell<T> {
 
 export interface DataGridVisibleTransposeCell<T> extends DataGridTransposeCell<T> {
   recordIndex: number;
+  valueIndex: number;
 }
 
 export interface DataGridTransposeRow<T> {
@@ -115,6 +116,24 @@ export function nextKeyboardTransposeState(options: KeyboardTransposeStateOption
   return { showTranspose: true, transposeRowIndex: anchorRowIndex };
 }
 
+export function nextAppendedTransposeState(showTranspose: boolean, totalRecords: number): DataGridTransposeState {
+  if (!showTranspose || totalRecords <= 0) return { showTranspose: false, transposeRowIndex: null };
+  return { showTranspose: true, transposeRowIndex: totalRecords - 1 };
+}
+
+export function nextTransposeStateForRecordCount(
+  showTranspose: boolean,
+  transposeRowIndex: number | null,
+  totalRecords: number,
+): DataGridTransposeState {
+  if (!showTranspose || totalRecords <= 0) return { showTranspose: false, transposeRowIndex: null };
+  const requestedRowIndex = transposeRowIndex ?? 0;
+  return {
+    showTranspose: true,
+    transposeRowIndex: Math.max(0, Math.min(totalRecords - 1, requestedRowIndex)),
+  };
+}
+
 export function buildTransposeRows<T>(options: BuildTransposeRowsOptions<T>): Array<DataGridTransposeRow<T>> {
   return options.columns.map((column, columnIndex) => {
     return {
@@ -149,6 +168,7 @@ export function buildVisibleTransposeRows<T>(
         return [
           {
             recordIndex,
+            valueIndex,
             value,
             display: options.displayValue(value, column, columnIndex, recordIndex),
             isNull: value === null,

@@ -4,8 +4,10 @@ import {
   buildTransposeRows,
   buildVisibleTransposeRows,
   nextContextTransposeState,
+  nextAppendedTransposeState,
   nextKeyboardTransposeState,
   nextTransposeState,
+  nextTransposeStateForRecordCount,
   transposeAnchorRowIndex,
   transposeFieldWidth,
   transposeScrollLeftForRecord,
@@ -149,6 +151,7 @@ test("builds visible transpose rows from mapped source column indexes", () => {
   });
 
   assert.equal(rows[0].values[0].display, "Ada");
+  assert.equal(rows[0].values[0].valueIndex, 1);
 });
 
 test("keyboard transpose opens from the selected cell row and closes when active", () => {
@@ -181,6 +184,28 @@ test("keyboard transpose opens from the selected cell row and closes when active
       transposeRowIndex: null,
     },
   );
+});
+
+test("transpose follows appended rows when already open", () => {
+  assert.deepEqual(nextAppendedTransposeState(true, 4), {
+    showTranspose: true,
+    transposeRowIndex: 3,
+  });
+  assert.deepEqual(nextAppendedTransposeState(false, 4), {
+    showTranspose: false,
+    transposeRowIndex: null,
+  });
+});
+
+test("transpose state is preserved and clamped after record refresh", () => {
+  assert.deepEqual(nextTransposeStateForRecordCount(true, 4, 3), {
+    showTranspose: true,
+    transposeRowIndex: 2,
+  });
+  assert.deepEqual(nextTransposeStateForRecordCount(true, 1, 0), {
+    showTranspose: false,
+    transposeRowIndex: null,
+  });
 });
 
 test("calculates a horizontal record window with spacer widths", () => {

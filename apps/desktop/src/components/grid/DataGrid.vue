@@ -91,9 +91,11 @@ import {
 import { formatGridSqlLiteral } from "@/lib/dataGridSql";
 import {
   buildVisibleTransposeRows,
+  nextAppendedTransposeState,
   nextContextTransposeState,
   nextKeyboardTransposeState,
   nextTransposeState,
+  nextTransposeStateForRecordCount,
   transposeFieldWidth,
   transposeScrollLeftForRecord,
   visibleTransposeRecordWindow,
@@ -293,6 +295,7 @@ const imagePreviewSrc = ref("");
 const imagePreviewTitle = ref("");
 const transposeRowIndex = ref<number | null>(null);
 const showTranspose = ref(false);
+const preserveTransposeOnNextResult = ref(false);
 const transposeScrollRef = ref<HTMLElement | { $el?: HTMLElement }>();
 const transposeScrollLeft = ref(0);
 const transposeViewportWidth = ref(0);
@@ -1432,7 +1435,7 @@ const {
   applyCellValue,
   cancelEdit,
   onEditKeydown,
-  addRow,
+  addRow: addEditorRow,
   cloneRow,
   showDeleteRowConfirm,
   requestDeleteRow,
@@ -1515,6 +1518,7 @@ async function onToolbarCommit() {
 }
 
 function onToolbarRollback() {
+  preserveTransposeOnNextResult.value = showTranspose.value;
   discardChanges();
   emit(
     "reload",
@@ -1525,6 +1529,11 @@ function onToolbarRollback() {
     pageSize.value,
     (currentPage.value - 1) * pageSize.value,
   );
+}
+
+function addRow() {
+  addEditorRow();
+  focusAppendedTransposeRecord();
 }
 
 const sortedRows = computed(() => {
@@ -2481,6 +2490,22 @@ function scrollTransposeRecordIntoView(rowIndex: number) {
   });
 }
 
+function applyTransposeState(next: { showTranspose: boolean; transposeRowIndex: number | null }) {
+  showTranspose.value = next.showTranspose;
+  transposeRowIndex.value = next.transposeRowIndex;
+  if (next.showTranspose) {
+    nextTick(updateTransposeViewport);
+    if (next.transposeRowIndex !== null) scrollTransposeRecordIntoView(next.transposeRowIndex);
+  }
+}
+
+function focusAppendedTransposeRecord() {
+  if (!showTranspose.value) return;
+  nextTick(() => {
+    applyTransposeState(nextAppendedTransposeState(true, displayItems.value.length));
+  });
+}
+
 function onTransposePinnedResizeStart(event: MouseEvent) {
   event.preventDefault();
   const startX = event.clientX;
@@ -2578,6 +2603,8 @@ watch(isTransposeMode, (active) => {
 watch(
   () => props.result,
   () => {
+    const shouldPreserveTranspose = preserveTransposeOnNextResult.value;
+    preserveTransposeOnNextResult.value = false;
     if (getResetScrollAfterResult()) {
       clearResetScrollAfterResult();
       resetGridVerticalScroll();
@@ -2585,7 +2612,13 @@ watch(
     clearCellSelection();
     clearRowSelection();
     closeCellDetails();
-    closeTranspose();
+    if (shouldPreserveTranspose) {
+      applyTransposeState(
+        nextTransposeStateForRecordCount(showTranspose.value, transposeRowIndex.value, displayItems.value.length),
+      );
+    } else {
+      closeTranspose();
+    }
     exitTransaction();
   },
 );
@@ -3393,16 +3426,52 @@ defineExpose({
                       <div
                         v-for="cell in item.values"
                         :key="`${item.id}:${cell.recordIndex}`"
-                        class="shrink-0 border-r border-border/70 px-2 py-1.5 font-mono truncate"
+                        class="relative shrink-0 border-r border-border/70 px-2 py-1.5 font-mono truncate"
                         :class="{
                           'text-muted-foreground italic': cell.isNull,
                           'bg-primary/10': cell.recordIndex === transposeRowIndex,
+                          'bg-yellow-500/10 cell-dirty': displayItems[cell.recordIndex]?.isDirtyCol[cell.valueIndex],
+                          'cursor-text hover:bg-accent/50': canEditCellItem(
+                            displayItems[cell.recordIndex],
+                            cell.valueIndex,
+                          ),
                         }"
                         :style="{ width: `${transposeRecordWidth}px` }"
                         :title="cell.display"
                         @click="selectTransposeRecord(cell.recordIndex)"
+                        @dblclick.stop="
+                          canEditCellItem(displayItems[cell.recordIndex], cell.valueIndex) &&
+                          startEdit(displayItems[cell.recordIndex].id, cell.valueIndex)
+                        "
                       >
-                        {{ cell.display }}
+                        <template
+                          v-if="
+                            editingCell?.rowId === displayItems[cell.recordIndex]?.id &&
+                            editingCell?.col === cell.valueIndex
+                          "
+                        >
+                          <TemporalCellEditor
+                            v-if="temporalEditorKindForColumn(cell.valueIndex)"
+                            v-model="editValue"
+                            :kind="temporalEditorKindForColumn(cell.valueIndex)!"
+                            @cancel="cancelEdit"
+                            @commit="commitGridEdit"
+                          />
+                          <input
+                            v-else
+                            v-model="editValue"
+                            autocapitalize="off"
+                            autocorrect="off"
+                            spellcheck="false"
+                            class="cell-edit-input absolute inset-0 bg-background border-2 border-primary px-2 py-0.5 text-xs outline-none z-10"
+                            @blur="commitEdit"
+                            @click.stop
+                            @keydown.stop="onEditKeydown"
+                          />
+                        </template>
+                        <template v-else>
+                          {{ cell.display }}
+                        </template>
                       </div>
                       <div class="shrink-0" :style="{ width: `${transposeRecordWindow.afterWidth}px` }" />
                     </div>
