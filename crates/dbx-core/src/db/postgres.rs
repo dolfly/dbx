@@ -220,7 +220,7 @@ fn postgres_tables_sql() -> &'static str {
          CASE c.relkind WHEN 'r' THEN 'BASE TABLE' WHEN 'v' THEN 'VIEW' \
            WHEN 'm' THEN 'MATERIALIZED VIEW' WHEN 'f' THEN 'FOREIGN TABLE' \
            WHEN 'p' THEN 'BASE TABLE' END AS table_type, \
-         obj_description(c.oid) AS table_comment, \
+         obj_description(c.oid) AS table_comment \
          FROM pg_catalog.pg_class c \
          JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
          WHERE n.nspname = $1 AND c.relkind IN ('r','v','m','f','p') \
