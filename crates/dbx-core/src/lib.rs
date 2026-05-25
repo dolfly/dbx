@@ -13,6 +13,7 @@ pub mod db;
 pub mod db_admin_sql;
 pub mod external;
 pub mod history;
+pub mod jdbc;
 pub mod models;
 pub mod mongo_ops;
 pub mod object_source_sql;

@@ -174,6 +174,40 @@ pub async fn import_agents_from_zip(
     Err(AppError("No file uploaded".to_string()))
 }
 
+pub async fn import_agent_jar(
+    State(state): State<Arc<WebState>>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mut db_type: Option<String> = None;
+    let mut jar_data: Option<Vec<u8>> = None;
+    let mut jar_name = String::new();
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "dbType" {
+            db_type = Some(field.text().await.map_err(|e| AppError(e.to_string()))?);
+        } else if name == "file" {
+            jar_name = field.file_name().unwrap_or("driver.jar").to_string();
+            if !jar_name.to_lowercase().ends_with(".jar") {
+                return Err(AppError("Only .jar files can be imported".to_string()));
+            }
+            jar_data = Some(field.bytes().await.map_err(|e| AppError(e.to_string()))?.to_vec());
+        }
+    }
+
+    let db_type = db_type.ok_or_else(|| AppError("Missing dbType field".to_string()))?;
+    let data = jar_data.ok_or_else(|| AppError("No file uploaded".to_string()))?;
+
+    let temp_dir = state.app.plugins.root_dir().join("jar_upload_tmp");
+    std::fs::create_dir_all(&temp_dir).map_err(|e| AppError(e.to_string()))?;
+    let tmp_path = temp_dir.join(&jar_name);
+    std::fs::write(&tmp_path, &data).map_err(|e| AppError(e.to_string()))?;
+
+    dbx_core::agent_service::import_agent_jar(&state.app.agent_manager, &db_type, &tmp_path).map_err(AppError::from)?;
+    let _ = std::fs::remove_file(&tmp_path);
+    Ok(Json(serde_json::json!({ "success": true })))
+}
+
 pub async fn reinstall_jre(
     State(state): State<Arc<WebState>>,
     Json(req): Json<JreRequest>,

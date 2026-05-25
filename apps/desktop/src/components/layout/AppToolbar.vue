@@ -82,7 +82,7 @@ function onToolbarDblClick(e: MouseEvent) {
 <template>
   <div
     class="h-10 flex items-center gap-1 px-2 border-b bg-muted/30 shrink-0"
-    :class="{ 'pl-17.5': shouldReserveMacTrafficLightInset(isMac, isFullscreen) }"
+    :class="{ 'pl-17.5': shouldReserveMacTrafficLightInset(isMac, isFullscreen, isDesktop) }"
     data-tauri-drag-region
     @dblclick="onToolbarDblClick"
   >
@@ -147,7 +147,6 @@ function onToolbarDblClick(e: MouseEvent) {
     </Button>
 
     <Button
-      v-if="isDesktop"
       variant="ghost"
       size="sm"
       class="h-8 px-2 text-xs gap-1"

@@ -5,6 +5,7 @@ pub mod connection;
 pub mod data_compare;
 pub mod database_export;
 pub mod history;
+pub mod jdbc;
 pub mod layout;
 pub mod mongo;
 pub mod plugins;
