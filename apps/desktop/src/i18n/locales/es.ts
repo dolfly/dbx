@@ -747,6 +747,7 @@ export default {
     selectAll: "Seleccionar todo",
     clear: "Limpiar",
     showAll: "Mostrar todo",
+    showSystemDatabases: "Mostrar bases de datos del sistema",
     save: "Guardar",
     loadFailed: "No se pudieron cargar las bases de datos: {message}",
   },

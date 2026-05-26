@@ -854,6 +854,7 @@ export default {
     selectAll: "Select all",
     clear: "Clear",
     showAll: "Show all",
+    showSystemDatabases: "Show system databases",
     save: "Save",
     loadFailed: "Failed to load databases: {message}",
   },

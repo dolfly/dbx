@@ -835,6 +835,7 @@ export default {
     selectAll: "全选",
     clear: "清空",
     showAll: "显示全部",
+    showSystemDatabases: "显示系统库",
     save: "保存",
     loadFailed: "加载数据库失败：{message}",
   },

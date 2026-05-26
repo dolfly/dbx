@@ -172,14 +172,7 @@ pub async fn test_connection(client: &ChClient) -> Result<(), String> {
 }
 
 pub async fn list_databases(client: &ChClient) -> Result<Vec<DatabaseInfo>, String> {
-    let result = ch_query(
-        client,
-        "SELECT name FROM system.databases \
-         WHERE name NOT IN ('system', 'INFORMATION_SCHEMA', 'information_schema') \
-         ORDER BY name",
-        None,
-    )
-    .await?;
+    let result = ch_query(client, "SELECT name FROM system.databases ORDER BY name", None).await?;
     Ok(result.data.iter().map(|row| DatabaseInfo { name: row[0].as_str().unwrap_or("").to_string() }).collect())
 }
 

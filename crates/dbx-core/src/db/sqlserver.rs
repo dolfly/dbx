@@ -261,8 +261,7 @@ pub async fn list_databases(client: &mut SqlServerClient) -> Result<Vec<Database
         .query(
             "SELECT name \
              FROM sys.databases \
-             WHERE database_id > 4 \
-               AND state = 0 \
+             WHERE state = 0 \
              ORDER BY name",
             &[],
         )

@@ -1,7 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
+  filterDatabaseNamesForConnection,
   filterVisibleDatabaseNames,
+  isSystemDatabaseName,
   normalizeVisibleDatabaseSelection,
   visibleDatabaseFilterIsEnabled,
 } from "../../apps/desktop/src/lib/visibleDatabases.ts";
@@ -12,10 +14,7 @@ test("undefined visible database filter keeps every database", () => {
 });
 
 test("configured visible database filter keeps selected databases in source order", () => {
-  assert.deepEqual(filterVisibleDatabaseNames(["app", "analytics", "billing"], ["billing", "app"]), [
-    "app",
-    "billing",
-  ]);
+  assert.deepEqual(filterVisibleDatabaseNames(["app", "analytics", "billing"], ["billing", "app"]), ["app", "billing"]);
   assert.equal(visibleDatabaseFilterIsEnabled(["billing", "app"]), true);
 });
 
@@ -28,5 +27,35 @@ test("normalizes selected database names against fresh database names", () => {
   assert.deepEqual(normalizeVisibleDatabaseSelection(["billing", "missing", "app", "app"], ["app", "billing"]), [
     "billing",
     "app",
+  ]);
+});
+
+test("mysql system databases are hidden by default but can be explicitly selected", () => {
+  const databases = ["app", "information_schema", "mysql", "performance_schema", "sys"];
+  assert.deepEqual(filterDatabaseNamesForConnection(databases, { db_type: "mysql" }), ["app"]);
+  assert.deepEqual(
+    filterDatabaseNamesForConnection(databases, { db_type: "mysql", visible_databases: ["app", "sys"] }),
+    ["app", "sys"],
+  );
+  assert.equal(isSystemDatabaseName("mysql", "performance_schema"), true);
+  assert.equal(isSystemDatabaseName("postgres", "information_schema"), false);
+});
+
+test("system database detection is registered per database type", () => {
+  assert.deepEqual(filterDatabaseNamesForConnection(["default", "system"], { db_type: "clickhouse" }), ["default"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["master", "app", "tempdb"], { db_type: "sqlserver" }), ["app"]);
+  assert.equal(isSystemDatabaseName("clickhouse", "INFORMATION_SCHEMA"), true);
+  assert.equal(isSystemDatabaseName("sqlserver", "msdb"), true);
+});
+
+test("system database registry covers common database families", () => {
+  assert.deepEqual(filterDatabaseNamesForConnection(["template0", "app"], { db_type: "postgres" }), ["app"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["admin", "shop", "local"], { db_type: "mongodb" }), ["shop"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["SYS", "HR", "SYSTEM"], { db_type: "oracle" }), ["HR"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["_SYS_BIC", "SALES"], { db_type: "saphana" }), ["SALES"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["system_schema", "app"], { db_type: "cassandra" }), ["app"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["system", "neo4j"], { db_type: "neo4j" }), ["neo4j"]);
+  assert.deepEqual(filterDatabaseNamesForConnection(["SNOWFLAKE", "ANALYTICS"], { db_type: "snowflake" }), [
+    "ANALYTICS",
   ]);
 });

@@ -5,9 +5,12 @@ import { CheckSquare, Loader2, Search, Square } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useDatabaseOptions } from "@/composables/useDatabaseOptions";
 import { useConnectionStore } from "@/stores/connectionStore";
-import { normalizeVisibleDatabaseSelection } from "@/lib/visibleDatabases";
+import {
+  filterDatabaseNamesForConnection,
+  isSystemDatabaseName,
+  normalizeVisibleDatabaseSelection,
+} from "@/lib/visibleDatabases";
 import * as api from "@/lib/api";
 
 const props = defineProps<{
@@ -22,22 +25,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const connectionStore = useConnectionStore();
-const { getDatabaseOptions } = useDatabaseOptions();
 
 const databaseNames = ref<string[]>([]);
 const selectedNames = ref<Set<string>>(new Set());
 const searchText = ref("");
+const showSystemDatabases = ref(false);
 const isLoading = ref(false);
 const errorMessage = ref("");
 
 const connection = computed(() => connectionStore.getConfig(props.connectionId));
+const listedDatabaseNames = computed(() => {
+  if (showSystemDatabases.value) return databaseNames.value;
+  return filterDatabaseNamesForConnection(databaseNames.value, connection.value);
+});
 const filteredDatabaseNames = computed(() => {
   const query = searchText.value.trim().toLowerCase();
-  if (!query) return databaseNames.value;
-  return databaseNames.value.filter((name) => name.toLowerCase().includes(query));
+  if (!query) return listedDatabaseNames.value;
+  return listedDatabaseNames.value.filter((name) => name.toLowerCase().includes(query));
 });
 const selectedCount = computed(() => selectedNames.value.size);
-const totalCount = computed(() => databaseNames.value.length);
+const totalCount = computed(() => listedDatabaseNames.value.length);
+const hasSystemDatabases = computed(() =>
+  databaseNames.value.some((database) => isSystemDatabaseName(connection.value?.db_type, database)),
+);
 
 watch(
   () => props.open,
@@ -47,6 +57,13 @@ watch(
   },
 );
 
+watch(showSystemDatabases, (show) => {
+  if (show) return;
+  selectedNames.value = new Set(
+    [...selectedNames.value].filter((database) => !isSystemDatabaseName(connection.value?.db_type, database)),
+  );
+});
+
 async function loadDatabases() {
   isLoading.value = true;
   errorMessage.value = "";
@@ -55,11 +72,17 @@ async function loadDatabases() {
     const names = await loadDatabaseNames();
     databaseNames.value = names;
     const configured = connection.value?.visible_databases;
-    const initialSelection = Array.isArray(configured) ? normalizeVisibleDatabaseSelection(configured, names) : names;
+    const initialSelection = Array.isArray(configured)
+      ? normalizeVisibleDatabaseSelection(configured, names)
+      : filterDatabaseNamesForConnection(names, connection.value);
     selectedNames.value = new Set(initialSelection);
+    showSystemDatabases.value = initialSelection.some((database) =>
+      isSystemDatabaseName(connection.value?.db_type, database),
+    );
   } catch (e: any) {
     databaseNames.value = [];
     selectedNames.value = new Set();
+    showSystemDatabases.value = false;
     errorMessage.value = String(e?.message || e);
   } finally {
     isLoading.value = false;
@@ -72,7 +95,14 @@ async function loadDatabaseNames(): Promise<string[]> {
     await connectionStore.ensureConnected(props.connectionId);
     return api.listSchemas(props.connectionId, config.database || "");
   }
-  return getDatabaseOptions(props.connectionId);
+  await connectionStore.ensureConnected(props.connectionId);
+  if (config?.db_type === "redis") {
+    return (await api.redisListDatabases(props.connectionId)).map((database) => String(database.db));
+  }
+  if (config?.db_type === "mongodb") {
+    return api.mongoListDatabases(props.connectionId);
+  }
+  return (await api.listDatabases(props.connectionId)).map((database) => database.name);
 }
 
 function toggleDatabase(database: string) {
@@ -83,7 +113,7 @@ function toggleDatabase(database: string) {
 }
 
 function selectAll() {
-  selectedNames.value = new Set(databaseNames.value);
+  selectedNames.value = new Set(listedDatabaseNames.value);
 }
 
 function clearSelection() {
@@ -139,6 +169,19 @@ async function saveSelection() {
           </button>
         </div>
       </div>
+
+      <label
+        v-if="hasSystemDatabases"
+        class="flex h-8 items-center gap-2 rounded-md px-1 text-xs text-muted-foreground"
+      >
+        <input
+          v-model="showSystemDatabases"
+          type="checkbox"
+          class="h-3.5 w-3.5 accent-primary"
+          :disabled="isLoading || !!errorMessage"
+        />
+        <span>{{ t("visibleDatabases.showSystemDatabases") }}</span>
+      </label>
 
       <div class="h-72 overflow-y-auto rounded-md border bg-background/50 p-1">
         <div v-if="isLoading" class="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">

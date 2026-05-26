@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { filterDatabaseNamesForConnection } from "@/lib/visibleDatabases";
 import * as api from "@/lib/api";
 
 export function useDatabaseOptions() {
@@ -19,10 +20,16 @@ export function useDatabaseOptions() {
         const dbs = await api.redisListDatabases(connectionId);
         databaseOptions.value[connectionId] = dbs.map((db) => String(db.db));
       } else if (connection.db_type === "mongodb") {
-        databaseOptions.value[connectionId] = await api.mongoListDatabases(connectionId);
+        databaseOptions.value[connectionId] = filterDatabaseNamesForConnection(
+          await api.mongoListDatabases(connectionId),
+          connection,
+        );
       } else {
         const dbs = await api.listDatabases(connectionId);
-        databaseOptions.value[connectionId] = dbs.map((db) => db.name);
+        databaseOptions.value[connectionId] = filterDatabaseNamesForConnection(
+          dbs.map((db) => db.name),
+          connection,
+        );
       }
     } finally {
       loadingDatabaseOptions.value[connectionId] = false;
