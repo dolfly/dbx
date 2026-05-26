@@ -25,6 +25,12 @@ export interface ConnectionConfig {
   ssl: boolean;
   ca_cert_path?: string;
   oracle_connection_type?: "service_name" | "sid";
+  redis_connection_mode?: "standalone" | "sentinel";
+  redis_sentinel_master?: string;
+  redis_sentinel_nodes?: string;
+  redis_sentinel_username?: string;
+  redis_sentinel_password?: string;
+  redis_sentinel_tls?: boolean;
 }
 
 export interface ConnectionStoreOptions {
@@ -97,6 +103,9 @@ export async function loadConnections(options: ConnectionStoreOptions = {}): Pro
       config.id = row.id;
       if (!config.password) config.password = getSecret(db, row.id, "password");
       if (!config.proxy_password) config.proxy_password = getSecret(db, row.id, "proxy_password");
+      if (!config.redis_sentinel_password) {
+        config.redis_sentinel_password = getSecret(db, row.id, "redis_sentinel_password");
+      }
       configs.push(config);
     }
 
@@ -198,6 +207,12 @@ export async function addConnection(config: Omit<ConnectionConfig, "id">): Promi
     sysdba: false,
     oracle_connection_type: normalized.oracle_connection_type ?? null,
     connection_string: null,
+    redis_connection_mode: normalized.redis_connection_mode ?? "standalone",
+    redis_sentinel_master: normalized.redis_sentinel_master ?? "",
+    redis_sentinel_nodes: normalized.redis_sentinel_nodes ?? "",
+    redis_sentinel_username: normalized.redis_sentinel_username ?? "",
+    redis_sentinel_password: "",
+    redis_sentinel_tls: normalized.redis_sentinel_tls ?? false,
   };
   const configJson = JSON.stringify(full);
 
@@ -215,6 +230,13 @@ export async function addConnection(config: Omit<ConnectionConfig, "id">): Promi
         id,
         "proxy_password",
         normalized.proxy_password,
+      );
+    }
+    if (normalized.redis_sentinel_password) {
+      db.prepare("INSERT INTO connection_secrets (connection_id, key, secret) VALUES (?, ?, ?)").run(
+        id,
+        "redis_sentinel_password",
+        normalized.redis_sentinel_password,
       );
     }
   });

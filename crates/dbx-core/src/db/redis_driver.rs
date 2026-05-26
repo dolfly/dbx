@@ -1,5 +1,10 @@
+use crate::models::connection::ConnectionConfig;
 use base64::Engine;
-use redis::{FromRedisValue, Value as RedisRawValue};
+use redis::{
+    sentinel::{Sentinel, SentinelNodeConnectionInfo},
+    ConnectionAddr, ConnectionInfo, FromRedisValue, ProtocolVersion, RedisConnectionInfo, TlsMode,
+    Value as RedisRawValue,
+};
 use serde::{Deserialize, Serialize};
 
 const STREAM_ENTRY_LIMIT: usize = 100;
@@ -69,6 +74,128 @@ pub async fn connect(url: &str) -> Result<redis::aio::MultiplexedConnection, Str
         .map_err(|e| format!("Redis authentication failed or command rejected: {e}"))?;
 
     Ok(con)
+}
+
+pub async fn connect_sentinel(config: &ConnectionConfig) -> Result<redis::aio::MultiplexedConnection, String> {
+    let service_name = config.redis_sentinel_master.trim();
+    if service_name.is_empty() {
+        return Err("Redis Sentinel master name is required".to_string());
+    }
+
+    let nodes = redis_sentinel_nodes(config)?;
+    let mut sentinel = Sentinel::build(nodes).map_err(|e| format!("Redis Sentinel connection failed: {e}"))?;
+    let node_connection_info = SentinelNodeConnectionInfo {
+        tls_mode: if config.ssl { Some(TlsMode::Secure) } else { None },
+        redis_connection_info: Some(redis_connection_info(&config.username, &config.password, 0)),
+    };
+    let client = tokio::time::timeout(
+        super::connection_timeout(),
+        sentinel.async_master_for(service_name, Some(&node_connection_info)),
+    )
+    .await
+    .map_err(|_| format!("Redis Sentinel lookup timed out ({}s)", super::CONNECTION_TIMEOUT_SECS))?
+    .map_err(|e| format!("Redis Sentinel master lookup failed: {e}"))?;
+
+    let mut con = tokio::time::timeout(super::connection_timeout(), client.get_multiplexed_async_connection())
+        .await
+        .map_err(|_| format!("Redis connection timed out ({}s)", super::CONNECTION_TIMEOUT_SECS))?
+        .map_err(|e| format!("Redis connection failed: {e}"))?;
+
+    tokio::time::timeout(super::connection_timeout(), redis::cmd("PING").query_async::<String>(&mut con))
+        .await
+        .map_err(|_| format!("Redis ping timed out ({}s)", super::CONNECTION_TIMEOUT_SECS))?
+        .map_err(|e| format!("Redis authentication failed or command rejected: {e}"))?;
+
+    Ok(con)
+}
+
+fn redis_sentinel_nodes(config: &ConnectionConfig) -> Result<Vec<ConnectionInfo>, String> {
+    let raw_nodes = config.redis_sentinel_nodes.trim();
+    let endpoints: Vec<String> = if raw_nodes.is_empty() {
+        vec![format!("{}:{}", config.host.trim(), config.port)]
+    } else {
+        raw_nodes
+            .split(|ch: char| ch == ',' || ch == ';' || ch == '\n' || ch == '\r')
+            .map(str::trim)
+            .filter(|node| !node.is_empty())
+            .map(ToOwned::to_owned)
+            .collect()
+    };
+
+    if endpoints.is_empty() {
+        return Err("At least one Redis Sentinel node is required".to_string());
+    }
+
+    endpoints.iter().map(|endpoint| redis_sentinel_node_connection_info(config, endpoint)).collect()
+}
+
+fn redis_sentinel_node_connection_info(config: &ConnectionConfig, endpoint: &str) -> Result<ConnectionInfo, String> {
+    let (host, port) = parse_redis_endpoint(endpoint, 26379)?;
+    Ok(connection_info(
+        &host,
+        port,
+        config.redis_sentinel_tls,
+        &config.redis_sentinel_username,
+        &config.redis_sentinel_password,
+        0,
+    ))
+}
+
+fn connection_info(host: &str, port: u16, tls: bool, username: &str, password: &str, db: i64) -> ConnectionInfo {
+    let addr = if tls {
+        ConnectionAddr::TcpTls { host: host.to_string(), port, insecure: false, tls_params: None }
+    } else {
+        ConnectionAddr::Tcp(host.to_string(), port)
+    };
+    ConnectionInfo { addr, redis: redis_connection_info(username, password, db) }
+}
+
+fn redis_connection_info(username: &str, password: &str, db: i64) -> RedisConnectionInfo {
+    RedisConnectionInfo {
+        db,
+        username: non_empty_string(username),
+        password: non_empty_string(password),
+        protocol: ProtocolVersion::RESP2,
+    }
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn parse_redis_endpoint(endpoint: &str, default_port: u16) -> Result<(String, u16), String> {
+    let endpoint = endpoint.trim();
+    if endpoint.is_empty() {
+        return Err("Redis Sentinel node cannot be empty".to_string());
+    }
+    let endpoint = endpoint.strip_prefix("redis://").or_else(|| endpoint.strip_prefix("rediss://")).unwrap_or(endpoint);
+    let endpoint = endpoint.rsplit_once('@').map(|(_, tail)| tail).unwrap_or(endpoint);
+    let endpoint = endpoint.split(['/', '?', '#']).next().unwrap_or(endpoint);
+
+    if let Some(rest) = endpoint.strip_prefix('[') {
+        let Some((host, tail)) = rest.split_once(']') else {
+            return Err(format!("Invalid Redis Sentinel node '{endpoint}'"));
+        };
+        let port = tail.strip_prefix(':').filter(|value| !value.is_empty()).map(parse_redis_port).transpose()?;
+        return Ok((host.to_string(), port.unwrap_or(default_port)));
+    }
+
+    if let Some((host, port)) = endpoint.rsplit_once(':') {
+        if !host.contains(':') && port.chars().all(|ch| ch.is_ascii_digit()) {
+            return Ok((host.to_string(), parse_redis_port(port)?));
+        }
+    }
+
+    Ok((endpoint.to_string(), default_port))
+}
+
+fn parse_redis_port(port: &str) -> Result<u16, String> {
+    port.parse::<u16>().map_err(|_| format!("Invalid Redis Sentinel port '{port}'"))
 }
 
 pub async fn list_databases(con: &mut redis::aio::MultiplexedConnection) -> Result<Vec<RedisDatabaseInfo>, String> {
@@ -899,10 +1026,11 @@ fn parse_scan_members(raw: RedisRawValue) -> Result<(u64, Vec<serde_json::Value>
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_command, is_redis_json_type, parse_command_argv, parse_database_count, parse_scan_keys,
-        parse_stream_entries, redis_command_raw_to_json, redis_json_raw_to_json, redis_json_value_preview,
-        redis_key_bytes_to_display, redis_key_bytes_to_raw, redis_key_raw_to_bytes, redis_key_value_preview,
-        redis_raw_to_json, redis_value_contains_binary, redis_value_matches_query, RedisCommandSafety, RedisRawValue,
+        classify_command, is_redis_json_type, parse_command_argv, parse_database_count, parse_redis_endpoint,
+        parse_scan_keys, parse_stream_entries, redis_command_raw_to_json, redis_json_raw_to_json,
+        redis_json_value_preview, redis_key_bytes_to_display, redis_key_bytes_to_raw, redis_key_raw_to_bytes,
+        redis_key_value_preview, redis_raw_to_json, redis_value_contains_binary, redis_value_matches_query,
+        RedisCommandSafety, RedisRawValue,
     };
 
     fn bulk(value: &str) -> RedisRawValue {
@@ -1067,6 +1195,18 @@ mod tests {
         assert!(is_redis_json_type("ReJSON-RL"));
         assert!(is_redis_json_type("json"));
         assert!(!is_redis_json_type("string"));
+    }
+
+    #[test]
+    fn parses_redis_sentinel_endpoints_with_default_ports() {
+        assert_eq!(parse_redis_endpoint("sentinel.local:26380", 26379).unwrap(), ("sentinel.local".to_string(), 26380));
+        assert_eq!(
+            parse_redis_endpoint("redis://user:pass@sentinel.local:26380/0", 26379).unwrap(),
+            ("sentinel.local".to_string(), 26380)
+        );
+        assert_eq!(parse_redis_endpoint("sentinel.local", 26379).unwrap(), ("sentinel.local".to_string(), 26379));
+        assert_eq!(parse_redis_endpoint("[::1]:26380", 26379).unwrap(), ("::1".to_string(), 26380));
+        assert_eq!(parse_redis_endpoint("::1", 26379).unwrap(), ("::1".to_string(), 26379));
     }
 
     #[test]

@@ -250,7 +250,15 @@ pub async fn test_connection(state: State<'_, Arc<AppState>>, config: Connection
                 Ok(_) => Ok("Connection successful".to_string()),
                 Err(e) => Err(e),
             },
-            DatabaseType::Redis => db::redis_driver::connect(&url).await.map(|_| "Connection successful".to_string()),
+            DatabaseType::Redis => {
+                let con = if config.uses_redis_sentinel() {
+                    db::redis_driver::connect_sentinel(&config).await?
+                } else {
+                    db::redis_driver::connect(&url).await?
+                };
+                drop(con);
+                Ok("Connection successful".to_string())
+            }
             DatabaseType::DuckDb => {
                 if state.duckdb_existing_pool_is_usable_for_config(&config).await? {
                     Ok("Connection successful".to_string())
@@ -360,7 +368,11 @@ pub async fn connect_db(state: State<'_, Arc<AppState>>, config: ConnectionConfi
         }
         DatabaseType::Sqlite => PoolKind::Sqlite(db::sqlite::connect_path(&expand_tilde(&db_config.host)).await?),
         DatabaseType::Redis => {
-            let con = db::redis_driver::connect(&url).await?;
+            let con = if db_config.uses_redis_sentinel() {
+                db::redis_driver::connect_sentinel(&db_config).await?
+            } else {
+                db::redis_driver::connect(&url).await?
+            };
             PoolKind::Redis(tokio::sync::Mutex::new(con))
         }
         DatabaseType::DuckDb => {

@@ -446,6 +446,7 @@ impl Storage {
                 sanitized.ssh_password = String::new();
                 sanitized.ssh_key_passphrase = String::new();
                 sanitized.proxy_password = String::new();
+                sanitized.redis_sentinel_password = String::new();
                 sanitized.connection_string = None;
                 let json = serde_json::to_string(&sanitized).map_err(|e| e.to_string())?;
 
@@ -456,6 +457,7 @@ impl Storage {
                 persist_secret_in_tx(&tx, &config.id, "ssh_password", &config.ssh_password)?;
                 persist_secret_in_tx(&tx, &config.id, "ssh_key_passphrase", &config.ssh_key_passphrase)?;
                 persist_secret_in_tx(&tx, &config.id, "proxy_password", &config.proxy_password)?;
+                persist_secret_in_tx(&tx, &config.id, "redis_sentinel_password", &config.redis_sentinel_password)?;
                 if let Some(cs) = &config.connection_string {
                     persist_secret_in_tx(&tx, &config.id, "connection_string", cs)?;
                 } else {
@@ -499,6 +501,7 @@ impl Storage {
             config.ssh_password = self.get_secret(&id, "ssh_password").await?.unwrap_or_default();
             config.ssh_key_passphrase = self.get_secret(&id, "ssh_key_passphrase").await?.unwrap_or_default();
             config.proxy_password = self.get_secret(&id, "proxy_password").await?.unwrap_or_default();
+            config.redis_sentinel_password = self.get_secret(&id, "redis_sentinel_password").await?.unwrap_or_default();
             config.connection_string = self.get_secret(&id, "connection_string").await?;
             configs.push(config.canonicalized());
         }

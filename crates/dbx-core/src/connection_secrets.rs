@@ -7,6 +7,7 @@ pub const MAIN_PASSWORD_KEY: &str = "password";
 pub const SSH_PASSWORD_KEY: &str = "ssh_password";
 pub const SSH_KEY_PASSPHRASE_KEY: &str = "ssh_key_passphrase";
 pub const PROXY_PASSWORD_KEY: &str = "proxy_password";
+pub const REDIS_SENTINEL_PASSWORD_KEY: &str = "redis_sentinel_password";
 pub const CONNECTION_STRING_KEY: &str = "connection_string";
 
 pub trait ConnectionSecretStore {
@@ -63,6 +64,7 @@ pub fn save_connections_to_file(
         persist_secret(store, &config.id, SSH_PASSWORD_KEY, &config.ssh_password)?;
         persist_secret(store, &config.id, SSH_KEY_PASSPHRASE_KEY, &config.ssh_key_passphrase)?;
         persist_secret(store, &config.id, PROXY_PASSWORD_KEY, &config.proxy_password)?;
+        persist_secret(store, &config.id, REDIS_SENTINEL_PASSWORD_KEY, &config.redis_sentinel_password)?;
         persist_optional_secret(store, &config.id, CONNECTION_STRING_KEY, config.connection_string.as_deref())?;
     }
 
@@ -113,6 +115,15 @@ pub fn load_connections_from_file(
             }
         } else {
             store.set_secret(&config.id, PROXY_PASSWORD_KEY, &config.proxy_password)?;
+            needs_rewrite = true;
+        }
+
+        if config.redis_sentinel_password.is_empty() {
+            if let Some(secret) = store.get_secret(&config.id, REDIS_SENTINEL_PASSWORD_KEY)? {
+                config.redis_sentinel_password = secret;
+            }
+        } else {
+            store.set_secret(&config.id, REDIS_SENTINEL_PASSWORD_KEY, &config.redis_sentinel_password)?;
             needs_rewrite = true;
         }
 
@@ -207,6 +218,7 @@ fn sanitize_connections(configs: &[ConnectionConfig]) -> Vec<ConnectionConfig> {
             config.ssh_password.clear();
             config.ssh_key_passphrase.clear();
             config.proxy_password.clear();
+            config.redis_sentinel_password.clear();
             config.connection_string = None;
             config
         })
@@ -221,7 +233,7 @@ pub fn secret_account(connection_id: &str, key: &str) -> String {
 mod tests {
     use super::{
         load_connections_from_file, save_connections_to_file, ConnectionSecretStore, CONNECTION_STRING_KEY,
-        MAIN_PASSWORD_KEY, SSH_PASSWORD_KEY,
+        MAIN_PASSWORD_KEY, REDIS_SENTINEL_PASSWORD_KEY, SSH_PASSWORD_KEY,
     };
     use crate::models::connection::{ConnectionConfig, DatabaseType, ProxyType};
     use std::cell::RefCell;
@@ -311,6 +323,12 @@ mod tests {
             sysdba: false,
             oracle_connection_type: None,
             connection_string: None,
+            redis_connection_mode: None,
+            redis_sentinel_master: String::new(),
+            redis_sentinel_nodes: String::new(),
+            redis_sentinel_username: String::new(),
+            redis_sentinel_password: String::new(),
+            redis_sentinel_tls: false,
             external_config: None,
             jdbc_driver_class: None,
             jdbc_driver_paths: Vec::new(),
@@ -327,15 +345,19 @@ mod tests {
     fn save_connections_moves_passwords_to_secret_store_and_redacts_file() {
         let path = temp_connections_file("save-redacts");
         let store = MemorySecretStore::default();
-        let configs = vec![connection("main", "db-secret", "ssh-secret")];
+        let mut config = connection("main", "db-secret", "ssh-secret");
+        config.redis_sentinel_password = "sentinel-secret".to_string();
+        let configs = vec![config];
 
         save_connections_to_file(&path, &configs, &store).unwrap();
 
         assert_eq!(store.get_existing("main", MAIN_PASSWORD_KEY).as_deref(), Some("db-secret"));
         assert_eq!(store.get_existing("main", SSH_PASSWORD_KEY).as_deref(), Some("ssh-secret"));
+        assert_eq!(store.get_existing("main", REDIS_SENTINEL_PASSWORD_KEY).as_deref(), Some("sentinel-secret"));
         let persisted = read_configs(&path);
         assert_eq!(persisted[0].password, "");
         assert_eq!(persisted[0].ssh_password, "");
+        assert_eq!(persisted[0].redis_sentinel_password, "");
     }
 
     #[test]
@@ -344,6 +366,7 @@ mod tests {
         let store = MemorySecretStore::default();
         store.set_existing("main", MAIN_PASSWORD_KEY, "db-secret");
         store.set_existing("main", SSH_PASSWORD_KEY, "ssh-secret");
+        store.set_existing("main", REDIS_SENTINEL_PASSWORD_KEY, "sentinel-secret");
         let sanitized = vec![connection("main", "", "")];
         std::fs::write(&path, serde_json::to_string_pretty(&sanitized).unwrap()).unwrap();
 
@@ -351,6 +374,7 @@ mod tests {
 
         assert_eq!(loaded[0].password, "db-secret");
         assert_eq!(loaded[0].ssh_password, "ssh-secret");
+        assert_eq!(loaded[0].redis_sentinel_password, "sentinel-secret");
     }
 
     #[test]

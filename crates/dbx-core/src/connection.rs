@@ -187,7 +187,11 @@ impl AppState {
             }
             DatabaseType::Sqlite => PoolKind::Sqlite(db::sqlite::connect_path(&expand_tilde(&db_config.host)).await?),
             DatabaseType::Redis => {
-                let con = db::redis_driver::connect(&url).await?;
+                let con = if db_config.uses_redis_sentinel() {
+                    db::redis_driver::connect_sentinel(&db_config).await?
+                } else {
+                    db::redis_driver::connect(&url).await?
+                };
                 PoolKind::Redis(tokio::sync::Mutex::new(con))
             }
             DatabaseType::DuckDb => {
@@ -907,6 +911,12 @@ mod tests {
             sysdba: false,
             oracle_connection_type: None,
             connection_string: None,
+            redis_connection_mode: None,
+            redis_sentinel_master: String::new(),
+            redis_sentinel_nodes: String::new(),
+            redis_sentinel_username: String::new(),
+            redis_sentinel_password: String::new(),
+            redis_sentinel_tls: false,
             external_config: None,
             jdbc_driver_class: None,
             jdbc_driver_paths: Vec::new(),

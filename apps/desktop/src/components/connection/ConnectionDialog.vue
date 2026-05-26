@@ -97,6 +97,12 @@ const defaultForm = (): Omit<ConnectionConfig, "id"> => ({
   connection_string: undefined,
   jdbc_driver_class: undefined,
   jdbc_driver_paths: [],
+  redis_connection_mode: "standalone",
+  redis_sentinel_master: "",
+  redis_sentinel_nodes: "",
+  redis_sentinel_username: "",
+  redis_sentinel_password: "",
+  redis_sentinel_tls: false,
 });
 
 const form = ref(defaultForm());
@@ -348,6 +354,12 @@ watch(
         connection_string: config.connection_string,
         jdbc_driver_class: config.jdbc_driver_class,
         jdbc_driver_paths: config.jdbc_driver_paths || [],
+        redis_connection_mode: config.redis_connection_mode || "standalone",
+        redis_sentinel_master: config.redis_sentinel_master || "",
+        redis_sentinel_nodes: config.redis_sentinel_nodes || "",
+        redis_sentinel_username: config.redis_sentinel_username || "",
+        redis_sentinel_password: config.redis_sentinel_password || "",
+        redis_sentinel_tls: config.redis_sentinel_tls || false,
       };
       selectedType.value = profile;
       mongoUseUrl.value = !!config.connection_string;
@@ -676,6 +688,30 @@ function connectionConfigForSubmit(id: string): ConnectionConfig {
   } else {
     config.oracle_connection_type = config.oracle_connection_type || "service_name";
   }
+  if (config.db_type !== "redis") {
+    config.redis_connection_mode = undefined;
+    config.redis_sentinel_master = undefined;
+    config.redis_sentinel_nodes = undefined;
+    config.redis_sentinel_username = undefined;
+    config.redis_sentinel_password = undefined;
+    config.redis_sentinel_tls = undefined;
+  } else if (config.redis_connection_mode === "sentinel") {
+    config.redis_sentinel_master = config.redis_sentinel_master?.trim() || "";
+    config.redis_sentinel_nodes = normalizeRedisSentinelNodes(config.redis_sentinel_nodes || "");
+    config.redis_sentinel_username = config.redis_sentinel_username?.trim() || "";
+    const firstNode = firstRedisSentinelEndpoint(config.redis_sentinel_nodes);
+    if (firstNode) {
+      config.host = firstNode.host;
+      config.port = firstNode.port;
+    }
+  } else {
+    config.redis_connection_mode = "standalone";
+    config.redis_sentinel_master = undefined;
+    config.redis_sentinel_nodes = undefined;
+    config.redis_sentinel_username = undefined;
+    config.redis_sentinel_password = undefined;
+    config.redis_sentinel_tls = undefined;
+  }
   if (config.db_type !== "clickhouse") {
     config.ca_cert_path = undefined;
   } else {
@@ -692,6 +728,45 @@ function connectionConfigForSubmit(id: string): ConnectionConfig {
       .filter(Boolean);
   }
   return config;
+}
+
+function normalizeRedisSentinelNodes(value: string): string {
+  return value
+    .split(/[\n,;]+/)
+    .map((node) => node.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function firstRedisSentinelEndpoint(value?: string): { host: string; port: number } | null {
+  const first = normalizeRedisSentinelNodes(value || "")
+    .split("\n")
+    .find(Boolean);
+  if (!first) return null;
+  return parseRedisEndpoint(first, 26379);
+}
+
+function parseRedisEndpoint(value: string, defaultPort: number): { host: string; port: number } {
+  const endpoint = value
+    .trim()
+    .replace(/^rediss?:\/\//, "")
+    .replace(/^.*@/, "")
+    .replace(/[/?#].*$/, "");
+  if (endpoint.startsWith("[")) {
+    const end = endpoint.indexOf("]");
+    if (end > 0) {
+      const host = endpoint.slice(1, end);
+      const portText = endpoint.slice(end + 1).replace(/^:/, "");
+      const port = Number(portText);
+      return { host, port: Number.isFinite(port) && port > 0 ? port : defaultPort };
+    }
+  }
+  const parts = endpoint.split(":");
+  if (parts.length === 2) {
+    const port = Number(parts[1]);
+    return { host: parts[0], port: Number.isFinite(port) && port > 0 ? port : defaultPort };
+  }
+  return { host: endpoint, port: defaultPort };
 }
 
 function resetTestState() {
@@ -1344,10 +1419,63 @@ function openExternalUrl(url: string) {
                 <!-- Redis: host, port, user, password, ssl -->
                 <template v-else-if="form.db_type === 'redis'">
                   <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t("connection.host") }}</Label>
+                    <Label class="text-right text-xs">{{ t("connection.mode") }}</Label>
+                    <div class="col-span-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        :variant="form.redis_connection_mode === 'sentinel' ? 'outline' : 'default'"
+                        @click="form.redis_connection_mode = 'standalone'"
+                      >
+                        {{ t("connection.redisStandaloneMode") }}
+                      </Button>
+                      <Button
+                        size="sm"
+                        :variant="form.redis_connection_mode === 'sentinel' ? 'default' : 'outline'"
+                        @click="form.redis_connection_mode = 'sentinel'"
+                      >
+                        {{ t("connection.redisSentinelMode") }}
+                      </Button>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{
+                      form.redis_connection_mode === "sentinel"
+                        ? t("connection.redisFirstSentinel")
+                        : t("connection.host")
+                    }}</Label>
                     <Input v-model="form.host" class="col-span-2" />
                     <Input v-model.number="form.port" type="number" class="col-span-1" />
                   </div>
+                  <template v-if="form.redis_connection_mode === 'sentinel'">
+                    <div class="grid grid-cols-4 items-start gap-4">
+                      <Label class="text-right mt-2">{{ t("connection.redisSentinelNodes") }}</Label>
+                      <textarea
+                        v-model="form.redis_sentinel_nodes"
+                        class="col-span-3 flex min-h-[76px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        placeholder="sentinel-1:26379&#10;sentinel-2:26379"
+                        spellcheck="false"
+                      />
+                    </div>
+                    <div class="grid grid-cols-4 items-center gap-4">
+                      <Label class="text-right">{{ t("connection.redisSentinelMaster") }}</Label>
+                      <Input v-model="form.redis_sentinel_master" class="col-span-3" placeholder="mymaster" />
+                    </div>
+                    <div class="grid grid-cols-4 items-center gap-4">
+                      <Label class="text-right">{{ t("connection.redisSentinelUser") }}</Label>
+                      <Input v-model="form.redis_sentinel_username" class="col-span-3" />
+                    </div>
+                    <div class="grid grid-cols-4 items-center gap-4">
+                      <Label class="text-right">{{ t("connection.redisSentinelPassword") }}</Label>
+                      <Input v-model="form.redis_sentinel_password" type="password" class="col-span-3" />
+                    </div>
+                    <div class="grid grid-cols-4 items-center gap-4">
+                      <Label class="text-right text-xs">{{ t("connection.redisSentinelTls") }}</Label>
+                      <label class="col-span-3 inline-flex items-center gap-2">
+                        <input type="checkbox" v-model="form.redis_sentinel_tls" class="mr-0" />
+                        <span class="text-xs text-muted-foreground">{{ t("connection.redisSentinelTlsHint") }}</span>
+                      </label>
+                    </div>
+                  </template>
                   <div class="grid grid-cols-4 items-center gap-4">
                     <Label class="text-right">{{ t("connection.user") }}</Label>
                     <Input v-model="form.username" class="col-span-3" placeholder="default" />

@@ -63,6 +63,18 @@ pub struct ConnectionConfig {
     pub oracle_connection_type: Option<String>,
     #[serde(default)]
     pub connection_string: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redis_connection_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub redis_sentinel_master: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub redis_sentinel_nodes: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub redis_sentinel_username: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub redis_sentinel_password: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub redis_sentinel_tls: bool,
     /// Typed configuration for external tabular sources.
     #[serde(default)]
     pub external_config: Option<serde_json::Value>,
@@ -232,6 +244,11 @@ impl ConnectionConfig {
             }
         }
         config
+    }
+
+    pub fn uses_redis_sentinel(&self) -> bool {
+        self.db_type == DatabaseType::Redis
+            && self.redis_connection_mode.as_deref().is_some_and(|mode| mode.eq_ignore_ascii_case("sentinel"))
     }
 
     pub fn connection_url(&self) -> String {
@@ -777,6 +794,12 @@ mod tests {
             sysdba: false,
             oracle_connection_type: None,
             connection_string: None,
+            redis_connection_mode: None,
+            redis_sentinel_master: String::new(),
+            redis_sentinel_nodes: String::new(),
+            redis_sentinel_username: String::new(),
+            redis_sentinel_password: String::new(),
+            redis_sentinel_tls: false,
             external_config: None,
             jdbc_driver_class: None,
             jdbc_driver_paths: Vec::new(),

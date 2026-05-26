@@ -87,6 +87,12 @@ export interface ConnectionConfig {
   connection_string?: string;
   jdbc_driver_class?: string;
   jdbc_driver_paths?: string[];
+  redis_connection_mode?: "standalone" | "sentinel";
+  redis_sentinel_master?: string;
+  redis_sentinel_nodes?: string;
+  redis_sentinel_username?: string;
+  redis_sentinel_password?: string;
+  redis_sentinel_tls?: boolean;
   one_time?: boolean;
 }
 

@@ -6005,6 +6005,7 @@ dependencies = [
  "num-bigint",
  "percent-encoding",
  "pin-project-lite",
+ "rand 0.9.4",
  "rustls 0.23.40",
  "rustls-native-certs 0.8.3",
  "ryu",
