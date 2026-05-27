@@ -382,7 +382,7 @@ function completionCacheKey(table: { name: string; schema?: string | null }) {
 
 async function ensureColumnsForTable(table: { name: string; schema?: string | null }) {
   const cacheKey = completionCacheKey(table);
-  if (cachedColumnsByTable.has(cacheKey) || !props.connectionId || !props.database) return;
+  if (cachedColumnsByTable.has(cacheKey) || !props.connectionId || props.database == null) return;
   const columns = await connectionStore.listCompletionColumns(
     props.connectionId,
     props.database,
@@ -453,7 +453,7 @@ function createSignatureDom(signature: ReturnType<typeof getSqlFunctionSignature
 }
 
 async function resolveSqlHoverTooltip(currentView: EditorViewType, pos: number) {
-  if (!props.connectionId || !props.database) return null;
+  if (!props.connectionId || props.database == null) return null;
 
   const sql = currentView.state.doc.toString();
   const range = identifierRangeAt(sql, pos);
@@ -582,7 +582,7 @@ function setSemanticDiagnostics(next: SqlSemanticDiagnostic[]) {
 }
 
 async function enrichSemanticDiagnosticTables(tables: SqlTableReference[]) {
-  if (!props.connectionId || !props.database) return tables;
+  if (!props.connectionId || props.database == null) return tables;
 
   const enriched: SqlTableReference[] = [];
   for (const table of tables) {
@@ -615,7 +615,7 @@ async function enrichSemanticDiagnosticTables(tables: SqlTableReference[]) {
 async function refreshSemanticDiagnostics() {
   const currentView = view.value;
   const runId = ++semanticDiagnosticRunId;
-  if (!currentView || !props.connectionId || !props.database) {
+  if (!currentView || !props.connectionId || props.database == null) {
     setSemanticDiagnostics([]);
     return;
   }
@@ -697,7 +697,7 @@ async function provideSqlCompletions(
   position: number,
   explicit: boolean,
 ) {
-  if (!props.connectionId || !props.database) return null;
+  if (!props.connectionId || props.database == null) return null;
 
   const epoch = ++completionEpoch;
 
@@ -1254,7 +1254,7 @@ onMounted(async () => {
           if (event.button !== 0) return false;
 
           const currentView = view.value;
-          if (!currentView || !props.connectionId || !props.database) {
+          if (!currentView || !props.connectionId || props.database == null) {
             return false;
           }
 

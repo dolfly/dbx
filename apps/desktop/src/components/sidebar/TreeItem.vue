@@ -159,6 +159,10 @@ function currentDatabaseType(): DatabaseType | undefined {
   return props.node.connectionId ? connectionStore.getConfig(props.node.connectionId)?.db_type : undefined;
 }
 
+function hasNodeDatabaseContext(node: TreeNode): node is TreeNode & { connectionId: string; database: string } {
+  return !!node.connectionId && hasTreeNodeDatabaseContext(node);
+}
+
 function getIconInfo(node: TreeNode): { icon: any; colorClass: string } | null {
   switch (node.type) {
     case "connection":
@@ -446,7 +450,7 @@ async function openObjectBrowser() {
     await connectionStore.ensureConnected(node.connectionId);
     connectionStore.activeConnectionId = node.connectionId;
 
-    if (node.database) {
+    if (hasTreeNodeDatabaseContext(node)) {
       queryStore.openObjectBrowser(node.connectionId, node.database, node.schema);
       return;
     }
@@ -482,7 +486,7 @@ function openSavedSqlFile() {
 
 async function openData() {
   const node = props.node;
-  if (!(node.type === "table" || node.type === "view") || !node.connectionId || !node.database) return;
+  if (!(node.type === "table" || node.type === "view") || !hasNodeDatabaseContext(node)) return;
   const config = connectionStore.getConfig(node.connectionId);
   const traceId = uuid().slice(0, 8);
   const startedAt = performance.now();
@@ -562,7 +566,7 @@ async function newQuery() {
   try {
     await connectionStore.ensureConnected(node.connectionId);
     connectionStore.activeConnectionId = node.connectionId;
-    if (node.database) {
+    if (hasTreeNodeDatabaseContext(node)) {
       queryStore.createTab(node.connectionId, node.database, undefined, "query", node.schema);
       return;
     }
