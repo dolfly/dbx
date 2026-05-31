@@ -136,6 +136,79 @@ test("evicting cached tab results releases multi-result payloads and sessions", 
   }
 });
 
+test("result cache eviction keeps recently accessed inactive tabs", async () => {
+  const restoreStorage = installMemoryStorage();
+  setActivePinia(createPinia());
+  const connectionStore = useConnectionStore();
+  const store = useQueryStore();
+  const originalFetch = globalThis.fetch;
+  let executeCount = 0;
+
+  connectionStore.addEphemeralConnection(conn("conn-1"));
+
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url === "/api/query/execute-multi") {
+      executeCount++;
+      const results: QueryResult[] = [
+        {
+          columns: ["id"],
+          rows: [[executeCount]],
+          affected_rows: 0,
+          execution_time_ms: 1,
+          session_id: `session-${executeCount}`,
+        },
+      ];
+      return new Response(JSON.stringify(results), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url === "/api/query/close-session") {
+      return new Response(JSON.stringify(true), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url === "/api/query/analyze-editability") {
+      return new Response(JSON.stringify({ editable: false, reason: "complex-source" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url === "/api/query/prepare-pagination-plan") {
+      return new Response(JSON.stringify({ sqlToExecute: "select 1", useAgentResultSession: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("unexpected request", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const tabIds: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const tabId = store.createTab("conn-1", "db", `Query ${i + 1}`);
+      tabIds.push(tabId);
+      await store.executeTabSql(tabId, `select ${i + 1}`);
+    }
+
+    store.activeTabId = tabIds[0];
+    await new Promise((resolve) => setTimeout(resolve, 1));
+
+    const tabId = store.createTab("conn-1", "db", "Query 7");
+    tabIds.push(tabId);
+    await store.executeTabSql(tabId, "select 7");
+
+    const recentlyViewed = store.tabs.find((tab) => tab.id === tabIds[0]);
+    const leastRecentlyUsed = store.tabs.find((tab) => tab.id === tabIds[1]);
+    assert.ok(recentlyViewed?.result);
+    assert.equal(recentlyViewed?.resultEvicted, undefined);
+    assert.equal(leastRecentlyUsed?.result, undefined);
+    assert.equal(leastRecentlyUsed?.resultEvicted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreStorage();
+  }
+});
+
 test("closing tabs clears removed result payloads before dropping tab references", async () => {
   const restoreStorage = installMemoryStorage();
   const originalFetch = globalThis.fetch;
@@ -201,10 +274,10 @@ test("starting a new query clears the previous result payload immediately", asyn
       });
     }
     if (url === "/api/query/execute-multi") {
-      return new Response(
-        JSON.stringify([{ columns: ["new"], rows: [[1]], affected_rows: 0, execution_time_ms: 1 }]),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify([{ columns: ["new"], rows: [[1]], affected_rows: 0, execution_time_ms: 1 }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
     if (url === "/api/query/analyze-editability") {
       return new Response(JSON.stringify({ editable: false, reason: "complex-source" }), {
@@ -221,6 +294,107 @@ test("starting a new query clears the previous result payload immediately", asyn
     assert.equal(tab.results, undefined);
     await execution;
     assert.deepEqual(tab.result?.columns, ["new"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreStorage();
+  }
+});
+
+test("query execution finishes without waiting for metadata analysis", async () => {
+  const restoreStorage = installMemoryStorage();
+  setActivePinia(createPinia());
+  const connectionStore = useConnectionStore();
+  const store = useQueryStore();
+  const originalFetch = globalThis.fetch;
+
+  connectionStore.addEphemeralConnection(conn("conn-1"));
+  const tabId = store.createTab("conn-1", "db", "Query");
+  const tab = store.tabs.find((item) => item.id === tabId);
+  assert.ok(tab);
+
+  let resolveMetadata: ((value: Response) => void) | undefined;
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url === "/api/query/prepare-pagination-plan") {
+      return new Response(JSON.stringify({ sqlToExecute: "select id from users", useAgentResultSession: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url === "/api/query/execute-multi") {
+      return new Response(JSON.stringify([{ columns: ["id"], rows: [[1]], affected_rows: 0, execution_time_ms: 1 }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url === "/api/query/analyze-editability") {
+      return new Promise<Response>((resolve) => {
+        resolveMetadata = resolve;
+      });
+    }
+    return new Response("unexpected request", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    await store.executeTabSql(tabId, "select id from users");
+
+    assert.equal(tab.isExecuting, false);
+    assert.equal(tab.executionId, undefined);
+    assert.deepEqual(tab.result?.columns, ["id"]);
+
+    resolveMetadata?.(
+      new Response(JSON.stringify({ editable: false, reason: "complex-source" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreStorage();
+  }
+});
+
+test("normal query execution does not create a tab-scoped client session", async () => {
+  const restoreStorage = installMemoryStorage();
+  setActivePinia(createPinia());
+  const connectionStore = useConnectionStore();
+  const store = useQueryStore();
+  const originalFetch = globalThis.fetch;
+
+  connectionStore.addEphemeralConnection(conn("conn-1"));
+  const tabId = store.createTab("conn-1", "db", "Query");
+  let executeBody: any;
+
+  globalThis.fetch = (async (input, init) => {
+    const url = String(input);
+    if (url === "/api/query/prepare-pagination-plan") {
+      return new Response(JSON.stringify({ sqlToExecute: "select 1", useAgentResultSession: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url === "/api/query/execute-multi") {
+      executeBody = JSON.parse(String(init?.body ?? "{}"));
+      return new Response(JSON.stringify([{ columns: ["id"], rows: [[1]], affected_rows: 0, execution_time_ms: 1 }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url === "/api/query/analyze-editability") {
+      return new Response(JSON.stringify({ editable: false, reason: "complex-source" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("unexpected request", { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    await store.executeTabSql(tabId, "select 1");
+
+    assert.equal(executeBody.clientSessionId, undefined);
+    assert.equal(executeBody.timeoutSecs, 30);
   } finally {
     globalThis.fetch = originalFetch;
     restoreStorage();

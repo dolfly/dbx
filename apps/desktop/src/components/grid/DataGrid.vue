@@ -221,12 +221,58 @@ const props = defineProps<{
   }) => Promise<void>;
 }>();
 
+const dataGridTraceId = uuid().slice(0, 8);
+const dataGridCreatedAt = performance.now();
+const dataGridElapsed = () => `${Math.round(performance.now() - dataGridCreatedAt)}ms`;
+
 const emit = defineEmits<{
   reload: [sql?: string, searchText?: string, whereInput?: string, orderBy?: string, limit?: number, offset?: number];
   paginate: [offset: number, limit: number, whereInput?: string, orderBy?: string];
   sort: [column: string, columnIndex: number, direction: "asc" | "desc" | null, whereInput?: string];
   "update:whereInput": [value: string];
 }>();
+
+console.info("[DBX][DataGrid:setup]", {
+  traceId: dataGridTraceId,
+  cacheKey: props.cacheKey,
+  rowCount: props.result.rows.length,
+  columnCount: props.result.columns.length,
+  backendMs: props.result.execution_time_ms,
+  loading: props.loading,
+});
+
+watch(
+  () => props.result,
+  (result) => {
+    const startedAt = performance.now();
+    console.info("[DBX][DataGrid:result:prop]", {
+      traceId: dataGridTraceId,
+      cacheKey: props.cacheKey,
+      rowCount: result.rows.length,
+      columnCount: result.columns.length,
+      backendMs: result.execution_time_ms,
+      loading: props.loading,
+      elapsedSinceSetup: dataGridElapsed(),
+    });
+    nextTick(() => {
+      console.info("[DBX][DataGrid:result:nextTick]", {
+        traceId: dataGridTraceId,
+        cacheKey: props.cacheKey,
+        elapsed: `${Math.round(performance.now() - startedAt)}ms`,
+        loading: props.loading,
+      });
+      requestAnimationFrame(() => {
+        console.info("[DBX][DataGrid:result:first-frame]", {
+          traceId: dataGridTraceId,
+          cacheKey: props.cacheKey,
+          elapsed: `${Math.round(performance.now() - startedAt)}ms`,
+          loading: props.loading,
+        });
+      });
+    });
+  },
+  { immediate: true },
+);
 
 const hasData = computed(() => props.result.columns.length > 0);
 
@@ -1971,15 +2017,36 @@ const displayItems = computed<RowItem[]>(() => {
 
 watch(
   () => displayItems.value.length,
-  () => {
+  (length) => {
+    const startedAt = performance.now();
+    console.info("[DBX][DataGrid:display-items:ready]", {
+      traceId: dataGridTraceId,
+      cacheKey: props.cacheKey,
+      displayItemCount: length,
+      sourceRowCount: props.result.rows.length,
+      elapsedSinceSetup: dataGridElapsed(),
+    });
     nextTick(() => {
       const scrollerEl = gridRef.value?.querySelector<HTMLElement>(".data-grid-scroller");
       if (scrollerEl) {
         updateGridScrollbarGutter(scrollerEl);
         updateGridHorizontalViewport(scrollerEl);
       }
+      requestAnimationFrame(() => {
+        const renderedRows = gridRef.value?.querySelectorAll(".vue-recycle-scroller__item-view").length;
+        console.info("[DBX][DataGrid:display-items:first-frame]", {
+          traceId: dataGridTraceId,
+          cacheKey: props.cacheKey,
+          displayItemCount: length,
+          renderedRows,
+          elapsed: `${Math.round(performance.now() - startedAt)}ms`,
+          elapsedSinceSetup: dataGridElapsed(),
+          loading: props.loading,
+        });
+      });
     });
   },
+  { immediate: true },
 );
 
 interface SearchMatch {
@@ -4158,12 +4225,27 @@ watch(
   () => props.loading,
   (isLoading) => {
     clearInterval(_loadingTimer);
+    console.info(isLoading ? "[DBX][DataGrid:loading:start]" : "[DBX][DataGrid:loading:stop]", {
+      traceId: dataGridTraceId,
+      cacheKey: props.cacheKey,
+      elapsedSinceSetup: dataGridElapsed(),
+    });
     if (isLoading) {
       _loadingStart = Date.now();
       loadingElapsed.value = 0;
       _loadingTimer = setInterval(() => {
         loadingElapsed.value = Date.now() - _loadingStart;
       }, 100);
+    } else {
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          console.info("[DBX][DataGrid:loading:stop:first-frame]", {
+            traceId: dataGridTraceId,
+            cacheKey: props.cacheKey,
+            elapsedSinceSetup: dataGridElapsed(),
+          });
+        });
+      });
     }
   },
 );

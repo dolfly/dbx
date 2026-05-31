@@ -153,8 +153,8 @@ const showPinnedDataTabsMenu = computed(
 const dataTabMenuItems = computed(() =>
   dataTabs.value.map((tab) => ({
     value: tab.id,
-    label: tabDisplayTitle(tab),
-    title: tabDisplayTitle(tab),
+    label: tabDisplayTitle(tab, t),
+    title: tabDisplayTitle(tab, t),
     icon: Table2,
     iconClass: "text-emerald-600 dark:text-emerald-400",
   })),
@@ -248,7 +248,7 @@ const dataTabsMenuContainerClass = computed(() =>
                   <PencilRuler v-else-if="tab.mode === 'structure'" class="h-3.5 w-3.5" />
                   <Code2 v-else class="h-3.5 w-3.5" />
                 </span>
-                <span class="min-w-0 truncate flex-1">{{ tabDisplayTitle(tab) }}</span>
+                <span class="min-w-0 truncate flex-1">{{ tabDisplayTitle(tab, t) }}</span>
                 <Tooltip>
                   <TooltipTrigger as-child>
                     <button
@@ -270,7 +270,7 @@ const dataTabsMenuContainerClass = computed(() =>
               </div>
             </TooltipTrigger>
             <TooltipContent side="bottom" class="text-xs grid grid-cols-[auto_1fr] gap-x-2">
-              <template v-for="line in tabTooltipLines(tab)" :key="line.label">
+              <template v-for="line in tabTooltipLines(tab, t)" :key="line.label">
                 <span class="text-muted-foreground">{{ line.label }}</span>
                 <span>{{ line.value }}</span>
               </template>

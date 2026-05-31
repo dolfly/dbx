@@ -335,6 +335,7 @@ export interface QueryTab {
   resultCountSql?: string;
   resultTotalRowCount?: number;
   resultSessionId?: string;
+  resultAccessedAt?: number;
   pinned?: boolean;
   result?: QueryResult;
   results?: QueryResult[];

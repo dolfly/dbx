@@ -22,7 +22,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import QueryEditor from "@/components/editor/QueryEditor.vue";
 import ColumnInfoPanel from "@/components/editor/ColumnInfoPanel.vue";
 import type { ColumnInfo } from "@/components/editor/ColumnInfoPanel.vue";
-const DataGrid = defineAsyncComponent(() => import("@/components/grid/DataGrid.vue"));
+const DataGrid = defineAsyncComponent(async () => {
+  const startedAt = performance.now();
+  console.info("[DBX][DataGrid:load:start]");
+  const component = await import("@/components/grid/DataGrid.vue");
+  console.info("[DBX][DataGrid:load:done]", { elapsed: `${Math.round(performance.now() - startedAt)}ms` });
+  return component;
+});
 const RedisKeyBrowser = defineAsyncComponent(() => import("@/components/redis/RedisKeyBrowser.vue"));
 const MongoDocBrowser = defineAsyncComponent(() => import("@/components/mongo/MongoDocBrowser.vue"));
 const ObjectBrowser = defineAsyncComponent(() => import("@/components/objects/ObjectBrowser.vue"));
@@ -168,6 +174,35 @@ watch(
   () => [props.activeTab.isExecuting, props.activeTab.isExplaining],
   ([isExecuting, isExplaining]) => {
     if (isExecuting || isExplaining) resultsPaneOpen.value = true;
+  },
+);
+
+watch(
+  () => props.activeTab.result,
+  (result) => {
+    if (!result) return;
+    const startedAt = performance.now();
+    console.info("[DBX][ContentArea:result:observed]", {
+      tabId: props.activeTab.id,
+      rowCount: result.rows.length,
+      columnCount: result.columns.length,
+      backendMs: result.execution_time_ms,
+      isExecuting: props.activeTab.isExecuting,
+    });
+    nextTick(() => {
+      console.info("[DBX][ContentArea:result:nextTick]", {
+        tabId: props.activeTab.id,
+        elapsed: `${Math.round(performance.now() - startedAt)}ms`,
+        isExecuting: props.activeTab.isExecuting,
+      });
+      requestAnimationFrame(() => {
+        console.info("[DBX][ContentArea:result:first-frame]", {
+          tabId: props.activeTab.id,
+          elapsed: `${Math.round(performance.now() - startedAt)}ms`,
+          isExecuting: props.activeTab.isExecuting,
+        });
+      });
+    });
   },
 );
 
@@ -499,7 +534,7 @@ defineExpose({ focusSearch, refreshData, handleModRTarget });
             class="inline-flex items-center rounded border border-border bg-muted/30 px-2 py-0.5 text-muted-foreground truncate"
           >
             <template v-if="activeTab.tableMeta?.schema">{{ activeTab.tableMeta.schema }}@</template
-            >{{ databaseDisplayNameForTab(activeTab.connectionId, activeTab.database) }}
+            >{{ databaseDisplayNameForTab(activeTab.connectionId, activeTab.database, t) }}
           </span>
           <span v-if="activeTab.tableMeta" class="ml-auto text-muted-foreground">
             {{ activeTab.tableMeta.columns.length }} {{ t("tree.columns") }}

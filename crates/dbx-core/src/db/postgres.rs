@@ -248,16 +248,30 @@ async fn execute_select_prepared(
     start: Instant,
     row_limit: usize,
 ) -> Result<QueryResult, tokio_postgres::Error> {
+    let prepared_start = Instant::now();
     let stmt = client.prepare_cached(sql).await?;
+    log::info!(
+        "[postgres][select:prepare_cached:done] elapsed_ms={} total_ms={}",
+        prepared_start.elapsed().as_millis(),
+        start.elapsed().as_millis()
+    );
     let columns: Vec<String> = stmt.columns().iter().map(|c| c.name().to_string()).collect();
     let column_types: Vec<String> = stmt.columns().iter().map(|c| c.type_().name().to_string()).collect();
 
     let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
+    let query_start = Instant::now();
     let stream = client.query_raw(&stmt, params).await?;
+    log::info!(
+        "[postgres][select:query_raw:done] elapsed_ms={} total_ms={} column_count={}",
+        query_start.elapsed().as_millis(),
+        start.elapsed().as_millis(),
+        columns.len()
+    );
     tokio::pin!(stream);
     let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
     let mut truncated = false;
 
+    let rows_start = Instant::now();
     while let Some(row_result) = stream.next().await {
         if result_rows.len() >= row_limit {
             truncated = true;
@@ -270,6 +284,13 @@ async fn execute_select_prepared(
                 .collect(),
         );
     }
+    log::info!(
+        "[postgres][select:rows:done] elapsed_ms={} total_ms={} row_count={} truncated={}",
+        rows_start.elapsed().as_millis(),
+        start.elapsed().as_millis(),
+        result_rows.len(),
+        truncated
+    );
 
     Ok(QueryResult {
         columns,
@@ -950,13 +971,40 @@ pub async fn execute_query_with_schema_and_max_rows(
     sql: &str,
     max_rows: Option<usize>,
 ) -> Result<QueryResult, String> {
+    let start = Instant::now();
+    let checkout_start = Instant::now();
     let client = pool.get().await.map_err(|e| e.to_string())?;
+    log::info!(
+        "[postgres][execute_with_schema:pool:done] elapsed_ms={} total_ms={} schema={}",
+        checkout_start.elapsed().as_millis(),
+        start.elapsed().as_millis(),
+        schema
+    );
+    let set_schema_start = Instant::now();
     client.execute(&format!("SET search_path TO {}", pg_quote_ident(schema)), &[]).await.map_err(pg_error_to_string)?;
+    log::info!(
+        "[postgres][execute_with_schema:set-search-path:done] elapsed_ms={} total_ms={}",
+        set_schema_start.elapsed().as_millis(),
+        start.elapsed().as_millis()
+    );
 
+    let query_start = Instant::now();
     let result = execute_query_with_max_rows_inner(&client, sql, max_rows).await;
+    log::info!(
+        "[postgres][execute_with_schema:query:done] elapsed_ms={} total_ms={} ok={}",
+        query_start.elapsed().as_millis(),
+        start.elapsed().as_millis(),
+        result.is_ok()
+    );
 
     // Always reset search_path so the connection is clean when returned to the pool
+    let reset_start = Instant::now();
     let _ = client.execute("RESET search_path", &[]).await;
+    log::info!(
+        "[postgres][execute_with_schema:reset-search-path:done] elapsed_ms={} total_ms={}",
+        reset_start.elapsed().as_millis(),
+        start.elapsed().as_millis()
+    );
 
     result
 }

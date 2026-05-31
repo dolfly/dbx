@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { uuid } from "@/lib/utils";
 import { ref, watch, computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { DatabaseType, QueryTab } from "@/types/database";
+import type { DatabaseType, QueryResult, QueryTab } from "@/types/database";
 import { orderPinnedFirst } from "@/lib/pinnedItems";
 import { canCancelQueryExecution } from "@/lib/queryExecutionState";
 import { closeAllTabsState, closeOtherTabsState } from "@/lib/tabCloseActions";
@@ -83,14 +83,20 @@ export const useQueryStore = defineStore("query", () => {
     }
   }
 
+  function touchResult(tab: QueryTab | undefined, accessedAt = Date.now()) {
+    if (tab?.result || tab?.results) tab.resultAccessedAt = accessedAt;
+  }
+
   function clearResultPayload(tab: QueryTab, options: { evicted?: boolean } = {}) {
     tab.result = undefined;
     tab.results = undefined;
     tab.activeResultIndex = undefined;
     tab.resultSessionId = undefined;
+    tab.resultAccessedAt = undefined;
     tab.queryAnalysis = undefined;
     tab.querySourceColumns = undefined;
     tab.queryEditabilityReason = undefined;
+    if (tab.mode === "query") tab.tableMeta = undefined;
     tab.resultEvicted = options.evicted ? true : undefined;
   }
 
@@ -447,34 +453,59 @@ export const useQueryStore = defineStore("query", () => {
     await executeTabSql(activeTabId.value, sql, { resultBaseSql: sql, resultSortedSql: undefined });
   }
 
-  /**
-   * Analyze query metadata for result tooltips and editability.
-   */
-  async function analyzeQueryMetadata(tab: QueryTab, sql: string) {
+  type QueryMetadataPatch = Pick<
+    QueryTab,
+    "queryAnalysis" | "querySourceColumns" | "queryEditabilityReason" | "tableMeta"
+  >;
+
+  function applyQueryMetadataPatch(tab: QueryTab, patch: QueryMetadataPatch) {
+    tab.queryAnalysis = patch.queryAnalysis;
+    tab.querySourceColumns = patch.querySourceColumns;
+    tab.queryEditabilityReason = patch.queryEditabilityReason;
+    tab.tableMeta = patch.tableMeta;
+  }
+
+  async function buildQueryMetadataPatch(
+    tab: QueryTab,
+    sql: string,
+    traceId?: string,
+    elapsed?: () => string,
+  ): Promise<QueryMetadataPatch | undefined> {
     if (tab.mode !== "query") return;
     if (!tab.result || !tab.result.columns.length) {
-      tab.queryAnalysis = undefined;
-      tab.querySourceColumns = undefined;
-      tab.tableMeta = undefined;
-      return;
+      return {
+        queryAnalysis: undefined,
+        querySourceColumns: undefined,
+        queryEditabilityReason: undefined,
+        tableMeta: undefined,
+      };
     }
 
+    console.info("[DBX][executeTabSql:metadata:editability:start]", { traceId, elapsed: elapsed?.() });
     const editability = await api.analyzeEditableQueryEditability(sql);
+    console.info("[DBX][executeTabSql:metadata:editability:done]", {
+      traceId,
+      editable: editability.editable,
+      reason: editability.editable ? undefined : editability.reason,
+      elapsed: elapsed?.(),
+    });
     if (!editability.editable) {
-      tab.queryAnalysis = undefined;
-      tab.querySourceColumns = undefined;
-      tab.queryEditabilityReason = editability.reason;
-      tab.tableMeta = undefined;
-      return;
+      return {
+        queryAnalysis: undefined,
+        querySourceColumns: undefined,
+        queryEditabilityReason: editability.reason,
+        tableMeta: undefined,
+      };
     }
     const analysis = editability.analysis;
 
     if (!tab.connectionId || !tab.database) {
-      tab.queryAnalysis = undefined;
-      tab.querySourceColumns = undefined;
-      tab.queryEditabilityReason = "metadata-unavailable";
-      tab.tableMeta = undefined;
-      return;
+      return {
+        queryAnalysis: undefined,
+        querySourceColumns: undefined,
+        queryEditabilityReason: "metadata-unavailable",
+        tableMeta: undefined,
+      };
     }
 
     // Resolve schema per database type
@@ -488,10 +519,20 @@ export const useQueryStore = defineStore("query", () => {
     }
 
     try {
+      console.info("[DBX][executeTabSql:metadata:get-columns:start]", {
+        traceId,
+        schema,
+        table: analysis.tableName,
+        elapsed: elapsed?.(),
+      });
       const columns = await api.getColumns(tab.connectionId, tab.database, schema, analysis.tableName);
+      console.info("[DBX][executeTabSql:metadata:get-columns:done]", {
+        traceId,
+        columnCount: columns.length,
+        elapsed: elapsed?.(),
+      });
       const primaryKeys = editablePrimaryKeys(dbType as DatabaseType, columns);
-
-      tab.tableMeta = {
+      const tableMeta = {
         schema: schema || undefined,
         tableName: analysis.tableName,
         columns,
@@ -499,36 +540,69 @@ export const useQueryStore = defineStore("query", () => {
       };
 
       if (primaryKeys.length === 0) {
-        tab.queryAnalysis = undefined;
-        tab.querySourceColumns = undefined;
-        tab.queryEditabilityReason = "no-primary-key";
-        return;
+        return {
+          queryAnalysis: undefined,
+          querySourceColumns: undefined,
+          queryEditabilityReason: "no-primary-key",
+          tableMeta,
+        };
       }
 
       if (!allPrimaryKeysPresent(primaryKeys, tab.result.columns, analysis)) {
-        tab.queryAnalysis = undefined;
-        tab.querySourceColumns = undefined;
-        tab.queryEditabilityReason = "primary-key-not-returned";
-        return;
+        return {
+          queryAnalysis: undefined,
+          querySourceColumns: undefined,
+          queryEditabilityReason: "primary-key-not-returned",
+          tableMeta,
+        };
       }
 
       if (!allEditableColumnsWriteable(analysis, tab.result.columns)) {
-        tab.queryAnalysis = undefined;
-        tab.querySourceColumns = undefined;
-        tab.queryEditabilityReason = "aliased-columns";
-        return;
+        return {
+          queryAnalysis: undefined,
+          querySourceColumns: undefined,
+          queryEditabilityReason: "aliased-columns",
+          tableMeta,
+        };
       }
 
-      tab.queryAnalysis = analysis;
-      tab.querySourceColumns = sourceColumnsForResult(analysis, tab.result.columns);
-      tab.queryEditabilityReason = undefined;
+      return {
+        queryAnalysis: analysis,
+        querySourceColumns: sourceColumnsForResult(analysis, tab.result.columns),
+        queryEditabilityReason: undefined,
+        tableMeta,
+      };
     } catch (err) {
       console.error("[DBX] ERROR fetching columns for query metadata:", err);
-      tab.queryAnalysis = undefined;
-      tab.querySourceColumns = undefined;
-      tab.queryEditabilityReason = "metadata-unavailable";
-      tab.tableMeta = undefined;
+      return {
+        queryAnalysis: undefined,
+        querySourceColumns: undefined,
+        queryEditabilityReason: "metadata-unavailable",
+        tableMeta: undefined,
+      };
     }
+  }
+
+  function analyzeQueryMetadataInBackground(
+    tabId: string,
+    sql: string,
+    result: QueryResult,
+    traceId: string,
+    elapsed: () => string,
+  ) {
+    void (async () => {
+      const tab = tabs.value.find((t) => t.id === tabId);
+      if (!tab || tab.result !== result) return;
+      console.info("[DBX][executeTabSql:metadata:start]", { traceId, elapsed: elapsed() });
+      const patch = await buildQueryMetadataPatch(tab, sql, traceId, elapsed);
+      const current = tabs.value.find((t) => t.id === tabId);
+      if (patch && current?.result === result) {
+        applyQueryMetadataPatch(current, patch);
+        console.info("[DBX][executeTabSql:metadata:done]", { traceId, elapsed: elapsed() });
+      } else {
+        console.warn("[DBX][executeTabSql:metadata:stale]", { traceId, elapsed: elapsed() });
+      }
+    })();
   }
 
   async function executeTabSql(
@@ -626,6 +700,7 @@ export const useQueryStore = defineStore("query", () => {
           current.results = undefined;
           current.activeResultIndex = undefined;
           current.result = mongoDocumentsToQueryResult(result.documents, performance.now() - startedAt, result.total);
+          touchResult(current);
           current.queryAnalysis = undefined;
           current.querySourceColumns = undefined;
           current.queryEditabilityReason = undefined;
@@ -657,6 +732,7 @@ export const useQueryStore = defineStore("query", () => {
           current.results = undefined;
           current.activeResultIndex = undefined;
           current.result = mongoCountToQueryResult(result.total, performance.now() - startedAt);
+          touchResult(current);
           current.queryAnalysis = undefined;
           current.querySourceColumns = undefined;
           current.queryEditabilityReason = undefined;
@@ -693,6 +769,7 @@ export const useQueryStore = defineStore("query", () => {
           current.results = undefined;
           current.activeResultIndex = undefined;
           current.result = mongoDocumentsToQueryResult(result.documents, performance.now() - startedAt, result.total);
+          touchResult(current);
           current.queryAnalysis = undefined;
           current.querySourceColumns = undefined;
           current.queryEditabilityReason = undefined;
@@ -704,6 +781,7 @@ export const useQueryStore = defineStore("query", () => {
       }
 
       console.info("[DBX][executeTabSql:execute-multi:start]", { traceId, elapsed: elapsed() });
+      const clientSessionId = useAgentResultSession ? tab.id : undefined;
       const executionOptions = {
         ...(typeof pageLimit === "number"
           ? useAgentResultSession
@@ -715,13 +793,14 @@ export const useQueryStore = defineStore("query", () => {
               }
             : { maxRows: pageLimit, fetchSize: pageLimit }
           : {}),
-        clientSessionId: tab.id,
+        ...(clientSessionId ? { clientSessionId } : {}),
         timeoutSecs: queryTimeoutSecs,
       };
       const frontendTimeoutSecs = Math.max(queryTimeoutSecs * 2, 60);
       const timeoutError = new Error(t("editor.queryTimeoutError", { seconds: frontendTimeoutSecs }));
+      const executionSchema = tab.mode === "data" ? undefined : tab.schema;
       const results = await Promise.race([
-        api.executeMulti(tab.connectionId, tab.database, sqlToExecute, tab.schema, executionId, executionOptions),
+        api.executeMulti(tab.connectionId, tab.database, sqlToExecute, executionSchema, executionId, executionOptions),
         new Promise<never>((_, reject) => setTimeout(() => reject(timeoutError), frontendTimeoutSecs * 1000)),
       ]);
       console.info("[DBX][executeTabSql:execute-multi:done]", {
@@ -749,6 +828,15 @@ export const useQueryStore = defineStore("query", () => {
         current.resultPageOffset = pageOffset;
         current.resultCountSql = countSql;
         current.resultSessionId = current.result?.session_id ?? undefined;
+        touchResult(current);
+        console.info("[DBX][executeTabSql:result:assigned]", {
+          traceId,
+          activeResultIndex: current.activeResultIndex,
+          rowCount: current.result?.rows.length ?? 0,
+          columnCount: current.result?.columns.length ?? 0,
+          backendMs: current.result?.execution_time_ms,
+          elapsed: elapsed(),
+        });
         if (countSql && current.result?.rows.length) {
           // When the result set is smaller than the page size we already have
           // all rows — compute the total directly instead of running COUNT(*).
@@ -778,9 +866,8 @@ export const useQueryStore = defineStore("query", () => {
               });
           }
         }
-        console.info("[DBX][executeTabSql:metadata:start]", { traceId, elapsed: elapsed() });
-        await analyzeQueryMetadata(current, queryBaseSql);
-        console.info("[DBX][executeTabSql:metadata:done]", { traceId, elapsed: elapsed() });
+        if (current.mode === "query" && current.result)
+          analyzeQueryMetadataInBackground(id, queryBaseSql, current.result, traceId, elapsed);
       } else {
         console.warn("[DBX][executeTabSql:stale-result]", {
           traceId,
@@ -806,6 +893,7 @@ export const useQueryStore = defineStore("query", () => {
         current.resultPageOffset = pageOffset;
         current.resultCountSql = countSql;
         current.resultSessionId = undefined;
+        touchResult(current);
       }
     } finally {
       const current = tabs.value.find((t) => t.id === id);
@@ -851,7 +939,6 @@ export const useQueryStore = defineStore("query", () => {
     tab.lastExplainedSql = sql;
     try {
       const result = await api.executeQuery(tab.connectionId, tab.database, built.sql, tab.schema, executionId, {
-        clientSessionId: tab.id,
         timeoutSecs: queryTimeoutSecs,
       });
       const current = tabs.value.find((t) => t.id === id);
@@ -926,6 +1013,7 @@ export const useQueryStore = defineStore("query", () => {
     if (!tab?.results || index < 0 || index >= tab.results.length) return;
     tab.activeResultIndex = index;
     tab.result = tab.results[index];
+    touchResult(tab);
     tab.queryAnalysis = undefined;
     tab.querySourceColumns = undefined;
     tab.queryEditabilityReason = undefined;
@@ -944,12 +1032,18 @@ export const useQueryStore = defineStore("query", () => {
   }
 
   async function trimResultCache() {
-    const inactive = tabs.value.filter((t) => t.id !== activeTabId.value && (t.result || t.results));
+    const inactive = tabs.value
+      .filter((t) => t.id !== activeTabId.value && (t.result || t.results))
+      .sort((a, b) => (a.resultAccessedAt ?? 0) - (b.resultAccessedAt ?? 0));
     if (inactive.length > MAX_CACHED_RESULTS) {
       const toEvict = inactive.slice(0, inactive.length - MAX_CACHED_RESULTS);
       await Promise.all(toEvict.map((t) => evictCachedResult(t)));
     }
   }
+
+  watch(activeTabId, (id) => {
+    touchResult(tabs.value.find((tab) => tab.id === id));
+  });
 
   async function reloadEvictedTab(id: string) {
     const tab = tabs.value.find((t) => t.id === id);

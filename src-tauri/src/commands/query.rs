@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::State;
 
 use crate::commands::connection::AppState;
@@ -63,6 +64,7 @@ pub async fn execute_multi(
         execution_id.as_ref().filter(|id| !id.trim().is_empty()).map(|id| state.running_queries.register(id.clone()));
     let cancel_token = registered_query.as_ref().map(|query| query.token());
     let trace_id = execution_id.as_deref().unwrap_or("no-execution-id");
+    let started_at = Instant::now();
     log::info!(
         "[query][execute_multi:start] trace_id={} connection_id={} database={} schema={:?} sql={}",
         trace_id,
@@ -91,12 +93,19 @@ pub async fn execute_multi(
     .await;
     match &result {
         Ok(results) => log::info!(
-            "[query][execute_multi:done] trace_id={} result_count={} row_counts={:?}",
+            "[query][execute_multi:done] trace_id={} elapsed_ms={} result_count={} row_counts={:?} backend_execution_times_ms={:?}",
             trace_id,
+            started_at.elapsed().as_millis(),
             results.len(),
-            results.iter().map(|result| result.rows.len()).collect::<Vec<_>>()
+            results.iter().map(|result| result.rows.len()).collect::<Vec<_>>(),
+            results.iter().map(|result| result.execution_time_ms).collect::<Vec<_>>()
         ),
-        Err(error) => log::error!("[query][execute_multi:error] trace_id={} error={}", trace_id, error),
+        Err(error) => log::error!(
+            "[query][execute_multi:error] trace_id={} elapsed_ms={} error={}",
+            trace_id,
+            started_at.elapsed().as_millis(),
+            error
+        ),
     }
     result
 }
