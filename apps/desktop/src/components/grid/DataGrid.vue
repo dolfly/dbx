@@ -4,7 +4,17 @@ const globalDdlOpen = ref(false);
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, useSlots, watch, type Component } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  onActivated,
+  onDeactivated,
+  useSlots,
+  watch,
+  type Component,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import {
   ArrowUp,
@@ -2982,6 +2992,7 @@ const canvasRenderStyleKey = computed(
 );
 let canvasResizeObserver: ResizeObserver | null = null;
 let canvasDrawFrame = 0;
+let dataGridIsActive = true;
 
 function toggleDataGridRenderMode() {
   settingsStore.updateEditorSettings({
@@ -3000,6 +3011,7 @@ function canvasScrollerElement(): HTMLElement | null {
 }
 
 function syncCanvasViewport() {
+  if (!dataGridIsActive) return;
   const scroller = canvasScrollerElement();
   if (!scroller) return;
   canvasViewportWidth.value = scroller.clientWidth;
@@ -3013,6 +3025,7 @@ function syncCanvasViewport() {
 function attachCanvasResizeObserver() {
   canvasResizeObserver?.disconnect();
   canvasResizeObserver = null;
+  if (!dataGridIsActive) return;
   if (!useCanvasGridRows.value) return;
   const scroller = canvasScrollerElement();
   if (!scroller) return;
@@ -3023,6 +3036,7 @@ function attachCanvasResizeObserver() {
 }
 
 function scheduleCanvasDraw() {
+  if (!dataGridIsActive) return;
   if (!useCanvasGridRows.value || canvasDrawFrame) return;
   canvasDrawFrame = requestAnimationFrame(() => {
     canvasDrawFrame = 0;
@@ -3345,11 +3359,26 @@ watch(
   ],
   scheduleCanvasDraw,
 );
-onMounted(() => nextTick(attachCanvasResizeObserver));
-onUnmounted(() => {
+
+function pauseCanvasGridWork() {
+  dataGridIsActive = false;
   canvasResizeObserver?.disconnect();
-  if (canvasDrawFrame) cancelAnimationFrame(canvasDrawFrame);
-});
+  canvasResizeObserver = null;
+  if (canvasDrawFrame) {
+    cancelAnimationFrame(canvasDrawFrame);
+    canvasDrawFrame = 0;
+  }
+}
+
+function resumeCanvasGridWork() {
+  dataGridIsActive = true;
+  nextTick(attachCanvasResizeObserver);
+}
+
+onMounted(resumeCanvasGridWork);
+onActivated(resumeCanvasGridWork);
+onDeactivated(pauseCanvasGridWork);
+onUnmounted(pauseCanvasGridWork);
 
 function setRowStatusFilter(value: string) {
   rowStatusFilter.value = value as RowStatusFilter;
@@ -4044,10 +4073,7 @@ function getTransposeRecordWidth(recordIndex: number): number {
 function ensureTransposeRecordWidths(count: number) {
   if (transposeRecordWidths.value.length !== count) {
     const prev = transposeRecordWidths.value;
-    const next = new Array(count);
-    for (let i = 0; i < count; i++) {
-      next[i] = i < prev.length ? prev[i] : calcTransposeRecordWidth(i);
-    }
+    const next = Array.from({ length: count }, (_, i) => (i < prev.length ? prev[i] : calcTransposeRecordWidth(i)));
     transposeRecordWidths.value = next;
   }
 }
@@ -4749,21 +4775,32 @@ const loadingElapsed = ref(0);
 let _loadingTimer: ReturnType<typeof setInterval> | undefined;
 let _loadingStart = 0;
 
+function stopLoadingElapsedTimer() {
+  clearInterval(_loadingTimer);
+  _loadingTimer = undefined;
+}
+
+function startLoadingElapsedTimer() {
+  stopLoadingElapsedTimer();
+  if (!dataGridIsActive || !props.loading) return;
+  _loadingStart = Date.now();
+  loadingElapsed.value = 0;
+  _loadingTimer = setInterval(() => {
+    loadingElapsed.value = Date.now() - _loadingStart;
+  }, 100);
+}
+
 watch(
   () => props.loading,
   (isLoading) => {
-    clearInterval(_loadingTimer);
+    stopLoadingElapsedTimer();
     console.info(isLoading ? "[DBX][DataGrid:loading:start]" : "[DBX][DataGrid:loading:stop]", {
       traceId: dataGridTraceId,
       cacheKey: props.cacheKey,
       elapsedSinceSetup: dataGridElapsed(),
     });
     if (isLoading) {
-      _loadingStart = Date.now();
-      loadingElapsed.value = 0;
-      _loadingTimer = setInterval(() => {
-        loadingElapsed.value = Date.now() - _loadingStart;
-      }, 100);
+      startLoadingElapsedTimer();
     } else {
       nextTick(() => {
         requestAnimationFrame(() => {
@@ -4777,6 +4814,9 @@ watch(
     }
   },
 );
+
+onActivated(startLoadingElapsedTimer);
+onDeactivated(stopLoadingElapsedTimer);
 
 onUnmounted(() => {
   cleanupFrames();
