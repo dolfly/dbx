@@ -340,10 +340,31 @@ fn add_sql_server_top(sql: &str, limit: usize) -> String {
         return sql.to_string();
     }
     if sql.len() >= 6 && sql[..6].eq_ignore_ascii_case("SELECT") {
-        format!("SELECT TOP ({limit}){}", &sql[6..])
+        let rest = &sql[6..];
+        if let Some((leading, after_modifier)) = strip_sql_server_select_modifier(rest, "DISTINCT") {
+            return format!("SELECT{leading}DISTINCT TOP ({limit}){after_modifier}");
+        }
+        if let Some((leading, after_modifier)) = strip_sql_server_select_modifier(rest, "ALL") {
+            return format!("SELECT{leading}ALL TOP ({limit}){after_modifier}");
+        }
+        format!("SELECT TOP ({limit}){rest}")
     } else {
         format!("SELECT TOP ({limit}) * FROM ({sql}) [dbx_page]")
     }
+}
+
+fn strip_sql_server_select_modifier<'a>(rest: &'a str, modifier: &str) -> Option<(&'a str, &'a str)> {
+    let trimmed = rest.trim_start();
+    let leading_ws_len = rest.len() - trimmed.len();
+    let candidate = trimmed.get(..modifier.len())?;
+    let after_modifier = trimmed.get(modifier.len()..)?;
+    if !candidate.eq_ignore_ascii_case(modifier) {
+        return None;
+    }
+    if after_modifier.chars().next().is_some_and(is_sql_token_part) {
+        return None;
+    }
+    Some((&rest[..leading_ws_len], after_modifier))
 }
 
 fn sql_server_statement_for_derived_table(statement: &str) -> String {
@@ -634,6 +655,48 @@ mod tests {
 
         assert_eq!(result.ok, true);
         assert_eq!(result.sql.unwrap(), "SELECT TOP (100) COUNT(*) FROM TicketInfo");
+    }
+
+    #[test]
+    fn inserts_sqlserver_top_after_distinct_modifier() {
+        let result = build_paginated_query_sql(PaginatedQuerySqlOptions {
+            original_sql: "SELECT DISTINCT ProjectType FROM JDDR_sys_BasicConfig_ProjectInfo_Data".to_string(),
+            database_type: Some(DatabaseType::SqlServer),
+            limit: 100,
+            offset: 0,
+        });
+
+        assert_eq!(result.ok, true);
+        assert_eq!(
+            result.sql.unwrap(),
+            "SELECT DISTINCT TOP (100) ProjectType FROM JDDR_sys_BasicConfig_ProjectInfo_Data"
+        );
+    }
+
+    #[test]
+    fn inserts_sqlserver_top_after_all_modifier() {
+        let result = build_paginated_query_sql(PaginatedQuerySqlOptions {
+            original_sql: "SELECT ALL ProjectType FROM JDDR_sys_BasicConfig_ProjectInfo_Data".to_string(),
+            database_type: Some(DatabaseType::SqlServer),
+            limit: 100,
+            offset: 0,
+        });
+
+        assert_eq!(result.ok, true);
+        assert_eq!(result.sql.unwrap(), "SELECT ALL TOP (100) ProjectType FROM JDDR_sys_BasicConfig_ProjectInfo_Data");
+    }
+
+    #[test]
+    fn does_not_treat_sqlserver_select_prefix_as_all_modifier() {
+        let result = build_paginated_query_sql(PaginatedQuerySqlOptions {
+            original_sql: "SELECT AllProjectType FROM JDDR_sys_BasicConfig_ProjectInfo_Data".to_string(),
+            database_type: Some(DatabaseType::SqlServer),
+            limit: 100,
+            offset: 0,
+        });
+
+        assert_eq!(result.ok, true);
+        assert_eq!(result.sql.unwrap(), "SELECT TOP (100) AllProjectType FROM JDDR_sys_BasicConfig_ProjectInfo_Data");
     }
 
     #[test]
