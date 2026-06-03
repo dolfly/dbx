@@ -6,7 +6,7 @@ import { useConnectionStore } from "@/stores/connectionStore";
 import { useQueryStore } from "@/stores/queryStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import type { QueryTab, TreeNode, TreeNodeType } from "@/types/database";
-import { filterSidebarTree } from "@/lib/sidebarSearchTree";
+import { filterSidebarSearchRootsByConnectionState, filterSidebarTree } from "@/lib/sidebarSearchTree";
 import { isCancelSearchShortcut } from "@/lib/keyboardShortcuts";
 import { usesTreeSchemaMode } from "@/lib/databaseFeatureSupport";
 import {
@@ -139,10 +139,7 @@ const filteredNodes = computed(() => {
   const q = deferredSearchQuery.value;
   if (q) {
     nodes = filterSidebarTree(nodes, q, searchCollapsedIds.value, searchableNodeTypes.value);
-    nodes = nodes.filter((node) => {
-      if (node.type === "connection-group") return true;
-      return node.connectionId ? store.connectedIds.has(node.connectionId) : true;
-    });
+    nodes = filterSidebarSearchRootsByConnectionState(nodes, store.connectedIds);
   }
 
   return nodes;

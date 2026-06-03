@@ -1,5 +1,5 @@
 import type { TreeNode, TreeNodeType } from "@/types/database";
-import { matchSidebarLabel } from "@/lib/sidebarSearch";
+import { createSidebarLabelMatcher, type SidebarLabelMatcher } from "@/lib/sidebarSearch";
 
 const preserveMatchedSubtreeTypes = new Set(["database", "schema", "table", "view"]);
 
@@ -20,12 +20,21 @@ export function filterSidebarTree(
   collapsedIds: ReadonlySet<string>,
   searchableNodeTypes?: ReadonlySet<TreeNodeType>,
 ): TreeNode[] {
+  return filterSidebarTreeWithMatcher(nodes, createSidebarLabelMatcher(query), collapsedIds, searchableNodeTypes);
+}
+
+function filterSidebarTreeWithMatcher(
+  nodes: TreeNode[],
+  matchLabel: SidebarLabelMatcher,
+  collapsedIds: ReadonlySet<string>,
+  searchableNodeTypes?: ReadonlySet<TreeNodeType>,
+): TreeNode[] {
   const filteredNodes: { node: TreeNode; score: number }[] = [];
 
   for (const node of nodes) {
     if (node.type === "object-browser" && node.hiddenChildren) {
       const matches = node.hiddenChildren
-        .map((child) => ({ node: child, score: matchSidebarLabel(normalizedLabel(child), query)?.score ?? 0 }))
+        .map((child) => ({ node: child, score: matchLabel(normalizedLabel(child))?.score ?? 0 }))
         .filter((match) => match.score > 0);
       filteredNodes.push(...matches);
       continue;
@@ -33,12 +42,12 @@ export function filterSidebarTree(
 
     const label = normalizedLabel(node);
     const canSelfMatch = !searchableNodeTypes || searchableNodeTypes.has(node.type);
-    const selfMatch = canSelfMatch ? matchSidebarLabel(label, query) : null;
+    const selfMatch = canSelfMatch ? matchLabel(label) : null;
     const preservesSubtree = !!selfMatch && preserveMatchedSubtreeTypes.has(node.type);
     const filteredChildren = preservesSubtree
       ? node.children
       : node.children
-        ? filterSidebarTree(node.children, query, collapsedIds, searchableNodeTypes)
+        ? filterSidebarTreeWithMatcher(node.children, matchLabel, collapsedIds, searchableNodeTypes)
         : undefined;
 
     if (selfMatch || (filteredChildren && filteredChildren.length > 0)) {
@@ -60,4 +69,14 @@ export function filterSidebarTree(
 
   filteredNodes.sort((a, b) => b.score - a.score);
   return filteredNodes.map((match) => match.node);
+}
+
+export function filterSidebarSearchRootsByConnectionState(
+  nodes: TreeNode[],
+  connectedIds: ReadonlySet<string>,
+): TreeNode[] {
+  return nodes.filter((node) => {
+    if (node.type === "connection-group" || node.type === "connection") return true;
+    return node.connectionId ? connectedIds.has(node.connectionId) : true;
+  });
 }

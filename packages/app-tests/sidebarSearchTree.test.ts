@@ -1,6 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { filterSidebarTree } from "../../apps/desktop/src/lib/sidebarSearchTree.ts";
+import {
+  filterSidebarSearchRootsByConnectionState,
+  filterSidebarTree,
+} from "../../apps/desktop/src/lib/sidebarSearchTree.ts";
 import type { TreeNode } from "../../apps/desktop/src/types/database.ts";
 
 test("preserves loaded table children when the table itself matches search", () => {
@@ -117,4 +120,31 @@ test("search scope excludes non-selected node self matches", () => {
   const filtered = filterSidebarTree(nodes, "orders", new Set(), new Set(["table"]));
 
   assert.equal(filtered.length, 0);
+});
+
+test("connection search results stay visible before connecting", () => {
+  const nodes: TreeNode[] = [
+    {
+      id: "conn:1",
+      label: "Orders local",
+      type: "connection",
+      connectionId: "conn:1",
+      isExpanded: false,
+      children: [],
+    },
+    {
+      id: "conn:1:db",
+      label: "orders",
+      type: "database",
+      connectionId: "conn:1",
+      database: "orders",
+    },
+  ];
+
+  const filtered = filterSidebarSearchRootsByConnectionState(nodes, new Set());
+
+  assert.deepEqual(
+    filtered.map((node) => node.id),
+    ["conn:1"],
+  );
 });
