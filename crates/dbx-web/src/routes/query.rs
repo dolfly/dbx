@@ -269,7 +269,7 @@ pub async fn execute_query(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let execution_id = req.execution_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let registered = state.app.running_queries.register(execution_id);
+    let registered = state.app.running_queries.register(execution_id.clone());
     let cancel_token = registered.token();
 
     let result = dbx_core::query::execute_sql_statement_with_options(
@@ -286,6 +286,7 @@ pub async fn execute_query(
             result_session_id: req.result_session_id,
             client_session_id: req.client_session_id,
             timeout_secs: req.timeout_secs,
+            execution_id: Some(execution_id),
         },
     )
     .await
@@ -301,7 +302,7 @@ pub async fn execute_multi(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let execution_id = req.execution_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let registered = state.app.running_queries.register(execution_id);
+    let registered = state.app.running_queries.register(execution_id.clone());
     let cancel_token = registered.token();
 
     let result = dbx_core::query::execute_multi_core_with_options(
@@ -318,6 +319,7 @@ pub async fn execute_multi(
             result_session_id: req.result_session_id,
             client_session_id: req.client_session_id,
             timeout_secs: req.timeout_secs,
+            execution_id: Some(execution_id),
         },
     )
     .await

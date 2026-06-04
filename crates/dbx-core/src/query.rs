@@ -56,6 +56,7 @@ pub struct QueryExecutionOptions {
     /// Query timeout in seconds. `None` uses the default (30s).
     /// `Some(0)` disables the timeout entirely.
     pub timeout_secs: Option<u64>,
+    pub execution_id: Option<String>,
 }
 
 fn query_result_row_limit(max_rows: Option<usize>) -> usize {
@@ -503,6 +504,12 @@ pub async fn do_execute(
     match pool {
         PoolKind::DuckDb(con) => {
             let con = con.clone();
+            if let Some(ref execution_id) = options.execution_id {
+                let interrupt_handle = con.lock().map_err(|e| e.to_string())?.interrupt_handle();
+                state.running_queries.register_interrupt(execution_id, move || {
+                    interrupt_handle.interrupt();
+                });
+            }
             let sql = sql.to_string();
             let database = database.map(str::to_string);
             let attached_names = duckdb_attached_names;
@@ -630,6 +637,12 @@ pub async fn do_execute(
                 return Err("External data sources are read-only. Only SELECT queries are supported.".to_string());
             }
             let con = ext_pool.cache.clone();
+            if let Some(ref execution_id) = options.execution_id {
+                let interrupt_handle = con.lock().map_err(|e| e.to_string())?.interrupt_handle();
+                state.running_queries.register_interrupt(execution_id, move || {
+                    interrupt_handle.interrupt();
+                });
+            }
             let sql = sql.to_string();
             let max_rows = options.max_rows;
             drop(connections);

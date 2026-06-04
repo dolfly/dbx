@@ -40,6 +40,7 @@ pub async fn execute_query(
             result_session_id,
             client_session_id,
             timeout_secs,
+            execution_id: execution_id.filter(|id| !id.trim().is_empty()),
         },
     )
     .await
@@ -63,7 +64,7 @@ pub async fn execute_multi(
     let registered_query =
         execution_id.as_ref().filter(|id| !id.trim().is_empty()).map(|id| state.running_queries.register(id.clone()));
     let cancel_token = registered_query.as_ref().map(|query| query.token());
-    let trace_id = execution_id.as_deref().unwrap_or("no-execution-id");
+    let trace_id = execution_id.clone().as_deref().unwrap_or("no-execution-id").to_string();
     let started_at = Instant::now();
     log::info!(
         "[query][execute_multi:start] trace_id={} connection_id={} database={} schema={:?} sql={}",
@@ -88,6 +89,7 @@ pub async fn execute_multi(
             result_session_id,
             client_session_id,
             timeout_secs,
+            execution_id: execution_id.filter(|id| !id.trim().is_empty()),
         },
     )
     .await;
