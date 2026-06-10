@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import {
-  TREE_SCHEMA_DEFAULT_DATABASE_SELECT_VALUE,
-  decodeSelectableDatabaseValue,
-  encodeSelectableDatabaseValue,
-  formatDatabaseLabel,
-  isDefaultDatabase,
-  resolveDefaultDatabase,
-} from "../../apps/desktop/src/lib/defaultDatabase.ts";
+import { TREE_SCHEMA_DEFAULT_DATABASE_SELECT_VALUE, decodeSelectableDatabaseValue, encodeSelectableDatabaseValue, formatDatabaseLabel, isDefaultDatabase, resolveDefaultDatabase } from "../../apps/desktop/src/lib/defaultDatabase.ts";
 
 test("优先使用连接上已保存的默认数据库", () => {
   assert.equal(resolveDefaultDatabase({ database: "analytics" }, ["app", "analytics"]), "analytics");
@@ -39,10 +32,7 @@ test("命名数据库保持原始值不变", () => {
 });
 
 test("数据库标签复用默认库显示语义", () => {
-  assert.equal(
-    formatDatabaseLabel({ db_type: "saphana" }, "", { defaultDatabase: "Default", noDatabase: "No database selected" }),
-    "Default",
-  );
+  assert.equal(formatDatabaseLabel({ db_type: "saphana" }, "", { defaultDatabase: "Default", noDatabase: "No database selected" }), "Default");
   assert.equal(
     formatDatabaseLabel({ db_type: "postgres" }, "analytics", {
       defaultDatabase: "Default",
@@ -50,8 +40,5 @@ test("数据库标签复用默认库显示语义", () => {
     }),
     "analytics",
   );
-  assert.equal(
-    formatDatabaseLabel({ db_type: "redis" }, "3", { defaultDatabase: "Default", noDatabase: "No database selected" }),
-    "db3",
-  );
+  assert.equal(formatDatabaseLabel({ db_type: "redis" }, "3", { defaultDatabase: "Default", noDatabase: "No database selected" }), "db3");
 });

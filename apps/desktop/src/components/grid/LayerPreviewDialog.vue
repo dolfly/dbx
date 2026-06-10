@@ -436,12 +436,7 @@ onBeforeUnmount(() => cleanupMap());
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent
-      :show-close-button="false"
-      :style="contentStyle"
-      class="layer-preview-dialog flex w-[96vw] max-w-[1800px] h-[88vh] max-h-[960px] min-w-[640px] min-h-[400px] flex-col gap-0 overflow-hidden rounded-xl border p-0 shadow-2xl"
-      @escape-key-down="close"
-    >
+    <DialogContent :show-close-button="false" :style="contentStyle" class="layer-preview-dialog flex w-[96vw] max-w-[1800px] h-[88vh] max-h-[960px] min-w-[640px] min-h-[400px] flex-col gap-0 overflow-hidden rounded-xl border p-0 shadow-2xl" @escape-key-down="close">
       <!-- Header -->
       <div class="flex h-12 shrink-0 items-center gap-2 border-b bg-muted/20 px-3">
         <div class="flex min-w-0 shrink-0 items-center gap-2">
@@ -450,12 +445,7 @@ onBeforeUnmount(() => cleanupMap());
         </div>
 
         <!-- Label property selector -->
-        <select
-          v-if="labelProperties.length"
-          v-model="labelProperty"
-          class="h-6 shrink-0 rounded border bg-background px-1.5 text-[11px] outline-none"
-          @change="onLabelPropertyChange"
-        >
+        <select v-if="labelProperties.length" v-model="labelProperty" class="h-6 shrink-0 rounded border bg-background px-1.5 text-[11px] outline-none" @change="onLabelPropertyChange">
           <option value="">— 标签 —</option>
           <option v-for="p in labelProperties" :key="p" :value="p">
             {{ p }}
@@ -465,94 +455,43 @@ onBeforeUnmount(() => cleanupMap());
         <div class="flex flex-1" />
 
         <!-- Basemap selector -->
-        <select
-          v-model="selectedBasemapId"
-          class="h-6 shrink-0 rounded border bg-background px-1.5 text-[11px] outline-none"
-        >
+        <select v-model="selectedBasemapId" class="h-6 shrink-0 rounded border bg-background px-1.5 text-[11px] outline-none">
           <option v-for="bm in basemaps" :key="bm.id" :value="bm.id">
             {{ bm.label }}
           </option>
         </select>
 
         <!-- Save as image -->
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-7 w-7 shrink-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          title="导出图片"
-          :disabled="isExporting"
-          @click="saveAsImage"
-        >
+        <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground" title="导出图片" :disabled="isExporting" @click="saveAsImage">
           <Camera v-if="!isExporting" class="h-3.5 w-3.5" />
           <Loader2 v-else class="h-3.5 w-3.5 animate-spin" />
         </Button>
 
         <!-- Maximise -->
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-7 w-7 shrink-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          :title="isMaximized ? '还原' : '最大化'"
-          @click="toggleMaximize"
-        >
+        <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground" :title="isMaximized ? '还原' : '最大化'" @click="toggleMaximize">
           <Maximize2 v-if="!isMaximized" class="h-3.5 w-3.5" />
           <Minimize2 v-else class="h-3.5 w-3.5" />
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-7 w-7 shrink-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          :title="t('dangerDialog.cancel')"
-          @click="close"
-        >
+        <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground" :title="t('dangerDialog.cancel')" @click="close">
           <X class="h-3.5 w-3.5" />
         </Button>
       </div>
 
       <!-- Map -->
       <div ref="mapContainer" class="relative w-full flex-1" style="min-height: 200px" data-map-container>
-        <div
-          class="absolute inset-0 z-10 flex items-center justify-center text-xs text-muted-foreground pointer-events-none"
-          data-map-placeholder
-        >
-          Loading map…
-        </div>
+        <div class="absolute inset-0 z-10 flex items-center justify-center text-xs text-muted-foreground pointer-events-none" data-map-placeholder>Loading map…</div>
       </div>
-      <div
-        v-if="mapError"
-        class="absolute inset-0 flex items-center justify-center bg-background/80 p-4 text-sm text-destructive"
-      >
+      <div v-if="mapError" class="absolute inset-0 flex items-center justify-center bg-background/80 p-4 text-sm text-destructive">
         {{ mapError }}
       </div>
 
       <!-- Resize handles -->
-      <div
-        class="absolute bottom-0 right-0 z-50 h-5 w-5 cursor-se-resize"
-        @pointerdown.prevent="onResizePointerDown($event, 'se')"
-        @pointermove="onResizePointerMove"
-        @pointerup="onResizePointerUp"
-        @pointercancel="onResizePointerUp"
-      >
-        <div
-          class="absolute bottom-0.5 right-0.5 h-2.5 w-2.5"
-          style="border-right: 2px solid; border-bottom: 2px solid; opacity: 0.3"
-        />
+      <div class="absolute bottom-0 right-0 z-50 h-5 w-5 cursor-se-resize" @pointerdown.prevent="onResizePointerDown($event, 'se')" @pointermove="onResizePointerMove" @pointerup="onResizePointerUp" @pointercancel="onResizePointerUp">
+        <div class="absolute bottom-0.5 right-0.5 h-2.5 w-2.5" style="border-right: 2px solid; border-bottom: 2px solid; opacity: 0.3" />
       </div>
-      <div
-        class="absolute bottom-0 left-2 right-6 z-50 h-2 cursor-s-resize opacity-0 hover:opacity-25"
-        @pointerdown.prevent="onResizePointerDown($event, 's')"
-        @pointermove="onResizePointerMove"
-        @pointerup="onResizePointerUp"
-        @pointercancel="onResizePointerUp"
-      />
-      <div
-        class="absolute right-0 top-2 bottom-6 z-50 w-2 cursor-e-resize opacity-0 hover:opacity-25"
-        @pointerdown.prevent="onResizePointerDown($event, 'e')"
-        @pointermove="onResizePointerMove"
-        @pointerup="onResizePointerUp"
-        @pointercancel="onResizePointerUp"
-      />
+      <div class="absolute bottom-0 left-2 right-6 z-50 h-2 cursor-s-resize opacity-0 hover:opacity-25" @pointerdown.prevent="onResizePointerDown($event, 's')" @pointermove="onResizePointerMove" @pointerup="onResizePointerUp" @pointercancel="onResizePointerUp" />
+      <div class="absolute right-0 top-2 bottom-6 z-50 w-2 cursor-e-resize opacity-0 hover:opacity-25" @pointerdown.prevent="onResizePointerDown($event, 'e')" @pointermove="onResizePointerMove" @pointerup="onResizePointerUp" @pointercancel="onResizePointerUp" />
     </DialogContent>
   </Dialog>
 </template>

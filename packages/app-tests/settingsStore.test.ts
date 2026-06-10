@@ -2,13 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { createPinia, setActivePinia } from "pinia";
 import { DEFAULT_SQL_FORMATTER_SETTINGS } from "../../apps/desktop/src/lib/sqlFormatterConfig.ts";
-import {
-  AI_PROVIDER_PRESETS,
-  DEFAULT_EDITOR_SETTINGS,
-  normalizeAiConfig,
-  normalizeEditorSettings,
-  useSettingsStore,
-} from "../../apps/desktop/src/stores/settingsStore.ts";
+import { AI_PROVIDER_PRESETS, DEFAULT_EDITOR_SETTINGS, normalizeAiConfig, normalizeEditorSettings, useSettingsStore } from "../../apps/desktop/src/stores/settingsStore.ts";
 
 const OLD_FONT_SIZE_KEY = "dbx-query-editor-font-size";
 
@@ -167,10 +161,7 @@ test("normalizes table structure editor density", () => {
   assert.equal(DEFAULT_EDITOR_SETTINGS.structureEditorDensity, "compact");
   assert.equal(normalizeEditorSettings({}).structureEditorDensity, "compact");
   assert.equal(normalizeEditorSettings({ structureEditorDensity: "standard" }).structureEditorDensity, "standard");
-  assert.equal(
-    normalizeEditorSettings({ structureEditorDensity: "comfortable" }).structureEditorDensity,
-    "comfortable",
-  );
+  assert.equal(normalizeEditorSettings({ structureEditorDensity: "comfortable" }).structureEditorDensity, "comfortable");
   assert.equal(normalizeEditorSettings({ structureEditorDensity: "invalid" as any }).structureEditorDensity, "compact");
 });
 
@@ -194,10 +185,7 @@ test("keeps saved active tab sidebar selection", () => {
 });
 
 test("keeps saved sidebar horizontal scroll preference", () => {
-  assert.equal(
-    normalizeEditorSettings({ sidebarAllowHorizontalScroll: true } as any).sidebarAllowHorizontalScroll,
-    true,
-  );
+  assert.equal(normalizeEditorSettings({ sidebarAllowHorizontalScroll: true } as any).sidebarAllowHorizontalScroll, true);
 });
 
 test("keeps saved sidebar activation", () => {
@@ -207,11 +195,7 @@ test("keeps saved sidebar activation", () => {
 
 test("normalizes saved sidebar hidden table prefixes", () => {
   assert.deepEqual(DEFAULT_EDITOR_SETTINGS.sidebarHiddenTablePrefixes, []);
-  assert.deepEqual(
-    normalizeEditorSettings({ sidebarHiddenTablePrefixes: [" app_", "app_", "", "ods."] } as any)
-      .sidebarHiddenTablePrefixes,
-    ["app_", "ods."],
-  );
+  assert.deepEqual(normalizeEditorSettings({ sidebarHiddenTablePrefixes: [" app_", "app_", "", "ods."] } as any).sidebarHiddenTablePrefixes, ["app_", "ods."]);
 });
 
 test("defaults column formatters to an empty record", () => {

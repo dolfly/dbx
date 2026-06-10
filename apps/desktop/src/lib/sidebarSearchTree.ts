@@ -14,28 +14,16 @@ function normalizedLabel(node: TreeNode): string {
   return normalized;
 }
 
-export function filterSidebarTree(
-  nodes: TreeNode[],
-  query: string,
-  collapsedIds: ReadonlySet<string>,
-  searchableNodeTypes?: ReadonlySet<TreeNodeType>,
-): TreeNode[] {
+export function filterSidebarTree(nodes: TreeNode[], query: string, collapsedIds: ReadonlySet<string>, searchableNodeTypes?: ReadonlySet<TreeNodeType>): TreeNode[] {
   return filterSidebarTreeWithMatcher(nodes, createSidebarLabelMatcher(query), collapsedIds, searchableNodeTypes);
 }
 
-function filterSidebarTreeWithMatcher(
-  nodes: TreeNode[],
-  matchLabel: SidebarLabelMatcher,
-  collapsedIds: ReadonlySet<string>,
-  searchableNodeTypes?: ReadonlySet<TreeNodeType>,
-): TreeNode[] {
+function filterSidebarTreeWithMatcher(nodes: TreeNode[], matchLabel: SidebarLabelMatcher, collapsedIds: ReadonlySet<string>, searchableNodeTypes?: ReadonlySet<TreeNodeType>): TreeNode[] {
   const filteredNodes: { node: TreeNode; score: number }[] = [];
 
   for (const node of nodes) {
     if (node.type === "object-browser" && node.hiddenChildren) {
-      const matches = node.hiddenChildren
-        .map((child) => ({ node: child, score: matchLabel(normalizedLabel(child))?.score ?? 0 }))
-        .filter((match) => match.score > 0);
+      const matches = node.hiddenChildren.map((child) => ({ node: child, score: matchLabel(normalizedLabel(child))?.score ?? 0 })).filter((match) => match.score > 0);
       filteredNodes.push(...matches);
       continue;
     }
@@ -44,11 +32,7 @@ function filterSidebarTreeWithMatcher(
     const canSelfMatch = !searchableNodeTypes || searchableNodeTypes.has(node.type);
     const selfMatch = canSelfMatch ? matchLabel(label) : null;
     const preservesSubtree = !!selfMatch && preserveMatchedSubtreeTypes.has(node.type);
-    const filteredChildren = preservesSubtree
-      ? node.children
-      : node.children
-        ? filterSidebarTreeWithMatcher(node.children, matchLabel, collapsedIds, searchableNodeTypes)
-        : undefined;
+    const filteredChildren = preservesSubtree ? node.children : node.children ? filterSidebarTreeWithMatcher(node.children, matchLabel, collapsedIds, searchableNodeTypes) : undefined;
 
     if (selfMatch || (filteredChildren && filteredChildren.length > 0)) {
       if (!node.children) {
@@ -71,10 +55,7 @@ function filterSidebarTreeWithMatcher(
   return filteredNodes.map((match) => match.node);
 }
 
-export function filterSidebarSearchRootsByConnectionState(
-  nodes: TreeNode[],
-  connectedIds: ReadonlySet<string>,
-): TreeNode[] {
+export function filterSidebarSearchRootsByConnectionState(nodes: TreeNode[], connectedIds: ReadonlySet<string>): TreeNode[] {
   return nodes.filter((node) => {
     if (node.type === "connection-group" || node.type === "connection") return true;
     return node.connectionId ? connectedIds.has(node.connectionId) : true;

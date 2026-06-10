@@ -110,9 +110,7 @@ test("completion metadata refresh is deduplicated and local lookups rank the cur
       const schema = url.searchParams.get("schema") ?? "";
       const filter = (url.searchParams.get("filter") ?? "").toLowerCase();
       const limit = Number(url.searchParams.get("limit") || "0") || undefined;
-      const tables = (tablesBySchema.get(schema) ?? [])
-        .filter((table) => !filter || table.name.toLowerCase().includes(filter))
-        .slice(0, limit);
+      const tables = (tablesBySchema.get(schema) ?? []).filter((table) => !filter || table.name.toLowerCase().includes(filter)).slice(0, limit);
       return Response.json(tables);
     }
     return Response.json(null);
@@ -123,10 +121,7 @@ test("completion metadata refresh is deduplicated and local lookups rank the cur
     const store = useConnectionStore();
     store.addEphemeralConnection(postgresConnection());
 
-    await Promise.all([
-      store.refreshCompletionTables("conn-large", "app", "customer", 20, "schema_010"),
-      store.refreshCompletionTables("conn-large", "app", "customer", 20, "schema_010"),
-    ]);
+    await Promise.all([store.refreshCompletionTables("conn-large", "app", "customer", 20, "schema_010"), store.refreshCompletionTables("conn-large", "app", "customer", 20, "schema_010")]);
 
     assert.equal(tableCalls, 1);
     assert.equal(schemaCalls, 0);

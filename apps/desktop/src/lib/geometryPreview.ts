@@ -107,12 +107,7 @@ function extractCoords(g: GeometryGroup): Coord[] {
 }
 
 // Draw polygon exterior + holes from a group structure
-function drawPolygonRings(
-  ctx: CanvasRenderingContext2D,
-  group: GeometryGroup,
-  mapX: (v: number) => number,
-  mapY: (v: number) => number,
-) {
+function drawPolygonRings(ctx: CanvasRenderingContext2D, group: GeometryGroup, mapX: (v: number) => number, mapY: (v: number) => number) {
   // group.children contains ring groups
   const rings = group.children.length > 0 ? group.children : [group];
   let ringIndex = 0;
@@ -131,13 +126,7 @@ function drawPolygonRings(
   }
 }
 
-function drawGroups(
-  ctx: CanvasRenderingContext2D,
-  groups: GeometryGroup[],
-  type: string,
-  mapX: (v: number) => number,
-  mapY: (v: number) => number,
-) {
+function drawGroups(ctx: CanvasRenderingContext2D, groups: GeometryGroup[], type: string, mapX: (v: number) => number, mapY: (v: number) => number) {
   if (type === "POINT" || type === "MULTIPOINT") {
     const allCoords = flattenCoords(groups);
     for (const [x, y] of allCoords) {

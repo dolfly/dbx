@@ -27,19 +27,7 @@ test("builds common SQL formatter config editor key bindings", () => {
 
   assert.deepEqual(
     bindings.map((binding) => binding.key),
-    [
-      "Tab",
-      "Shift-Tab",
-      "Mod-d",
-      "Shift-Mod-k",
-      "Alt-ArrowUp",
-      "Alt-ArrowDown",
-      "Shift-Alt-ArrowUp",
-      "Shift-Alt-ArrowDown",
-      "Ctrl-h",
-      "Shift-Alt-f",
-      "Mod-s",
-    ],
+    ["Tab", "Shift-Tab", "Mod-d", "Shift-Mod-k", "Alt-ArrowUp", "Alt-ArrowDown", "Shift-Alt-ArrowUp", "Shift-Alt-ArrowDown", "Ctrl-h", "Shift-Alt-f", "Mod-s"],
   );
 });
 
@@ -61,9 +49,7 @@ test("sets search, format, and apply binding details", () => {
 
 test("keeps duplicate line before later Mod-d search bindings", () => {
   const bindings = [...createBindings(), { key: "Mod-d", run: otherCommand }];
-  const duplicateLineIndex = bindings.findIndex(
-    (binding) => binding.key === "Mod-d" && binding.run === commands.copyLineDown,
-  );
+  const duplicateLineIndex = bindings.findIndex((binding) => binding.key === "Mod-d" && binding.run === commands.copyLineDown);
   const searchKeymapIndex = bindings.findIndex((binding) => binding.key === "Mod-d" && binding.run === otherCommand);
 
   assert.notEqual(duplicateLineIndex, -1);

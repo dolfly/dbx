@@ -30,12 +30,7 @@ export function normalizeObjectBrowserType(type: string): ObjectBrowserRow["type
   return "TABLE";
 }
 
-export function buildObjectBrowserRows(options: {
-  objects: ObjectInfo[];
-  database: string;
-  fallbackSchema: string;
-  needsSchema: boolean;
-}): ObjectBrowserRow[] {
+export function buildObjectBrowserRows(options: { objects: ObjectInfo[]; database: string; fallbackSchema: string; needsSchema: boolean }): ObjectBrowserRow[] {
   const seen = new Map<string, number>();
   const rows = options.objects.flatMap((object) => {
     const name = normalizeDatabaseObjectName(object.name);
@@ -77,10 +72,7 @@ function markPartitionRows(rows: ObjectBrowserRow[], fallbackSchema: string) {
     if (row.type !== "TABLE") continue;
     const parentName = row.partitionParentName || partitionParentName(row.name);
     if (!parentName) continue;
-    const parentKey = objectKey(
-      { ...row, schema: row.partitionParentSchema || row.schema, name: parentName },
-      fallbackSchema,
-    );
+    const parentKey = objectKey({ ...row, schema: row.partitionParentSchema || row.schema, name: parentName }, fallbackSchema);
     const parent = tableByKey.get(parentKey);
     if (!parent || parent.id === row.id) continue;
     row.partitionParentId = parent.id;
@@ -106,27 +98,16 @@ export function filterObjectBrowserRows(rows: ObjectBrowserRow[], query: string)
   if (!q) return rows;
   const regex = parseSlashDelimitedRegexQuery(query.trim());
   if (regex) {
-    return rows.filter((row) =>
-      [row.name, row.type, row.comment].filter(Boolean).some((value) => regex.test(String(value))),
-    );
+    return rows.filter((row) => [row.name, row.type, row.comment].filter(Boolean).some((value) => regex.test(String(value))));
   }
-  return rows.filter((row) =>
-    [row.name, row.type, row.comment].filter(Boolean).some((value) => String(value).toLowerCase().includes(q)),
-  );
+  return rows.filter((row) => [row.name, row.type, row.comment].filter(Boolean).some((value) => String(value).toLowerCase().includes(q)));
 }
 
-export function sortObjectBrowserRows(
-  rows: ObjectBrowserRow[],
-  key: ObjectBrowserSortKey,
-  direction: ObjectBrowserSortDirection,
-): ObjectBrowserRow[] {
+export function sortObjectBrowserRows(rows: ObjectBrowserRow[], key: ObjectBrowserSortKey, direction: ObjectBrowserSortDirection): ObjectBrowserRow[] {
   const multiplier = direction === "asc" ? 1 : -1;
   const compareNames = createDatabaseObjectNameComparator(rows.map((row) => row.name));
   return [...rows].sort((left, right) => {
-    const compared =
-      key === "name"
-        ? compareNames(left.name, right.name)
-        : compareObjectBrowserValue(left[key], right[key], key, direction);
+    const compared = key === "name" ? compareNames(left.name, right.name) : compareObjectBrowserValue(left[key], right[key], key, direction);
     if (compared !== 0) return compared * multiplier;
     return compareNames(left.name, right.name);
   });
@@ -145,12 +126,7 @@ export function formatObjectBrowserTimestamp(value: string | null | undefined): 
     .replace(/(?:Z|[+-]\d{2}(?::?\d{2})?)$/, "");
 }
 
-function compareObjectBrowserValue(
-  left: string | null | undefined,
-  right: string | null | undefined,
-  key: ObjectBrowserSortKey,
-  direction: ObjectBrowserSortDirection,
-): number {
+function compareObjectBrowserValue(left: string | null | undefined, right: string | null | undefined, key: ObjectBrowserSortKey, direction: ObjectBrowserSortDirection): number {
   const leftText = normalizeSortValue(left);
   const rightText = normalizeSortValue(right);
   if (!leftText && !rightText) return 0;

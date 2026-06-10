@@ -51,12 +51,10 @@ export default {
     availableMessage: "DBX {latest} está disponible. Estás usando la versión {current}.",
     upToDate: "DBX está actualizado ({version}).",
     failed: "Error al buscar actualizaciones: {error}",
-    rateLimited:
-      "Las verificaciones de actualizaciones de GitHub están temporalmente limitadas. Puedes abrir la página de lanzamientos para verificar manualmente.",
+    rateLimited: "Las verificaciones de actualizaciones de GitHub están temporalmente limitadas. Puedes abrir la página de lanzamientos para verificar manualmente.",
     openRelease: "Abrir lanzamiento",
     downloadAndInstall: "Descargar e instalar",
-    portableManualUpdate:
-      "Las versiones portables no pueden usar el instalador integrado. Descarga el ZIP portable desde la página de lanzamiento y extráelo sobre la carpeta actual de DBX para conservar portable.dbx y data.",
+    portableManualUpdate: "Las versiones portables no pueden usar el instalador integrado. Descarga el ZIP portable desde la página de lanzamiento y extráelo sobre la carpeta actual de DBX para conservar portable.dbx y data.",
     downloading: "Descargando {progress}%",
     downloadFailed: "Error al descargar la actualización: {error}",
     restart: "Salir y reiniciar",
@@ -73,6 +71,7 @@ export default {
     importDbx: "Importar configuración DBX",
     importNavicat: "Importar Navicat NCX",
     importDbeaver: "Importar DBeaver",
+    importDatagrip: "Importar DataGrip",
     export: "Exportar conexiones",
     collapse: "Contraer barra lateral",
     expand: "Expandir barra lateral",
@@ -104,6 +103,33 @@ export default {
     deleteFile: "Eliminar SQL",
     deleteFileConfirm: "¿Eliminar “{name}”?",
   },
+  sqlLibrary: {
+    title: "Biblioteca SQL",
+    empty: "Sin consultas guardadas",
+    emptyFolder: "Carpeta vacía",
+    unfiled: "Sin categoría",
+    exportFile: "Exportar SQL",
+    exportFolder: "Exportar carpeta",
+    exportLibrary: "Exportar biblioteca SQL",
+    importDirectory: "Importar carpeta local",
+    importIntoFolder: "Importar a esta carpeta",
+    openStorageDirectory: "Abrir directorio de SQL",
+    chooseSyncDirectory: "Definir directorio de sincronización local",
+    disableSyncDirectory: "Desactivar sincronización local",
+    syncDirectorySaved: "Directorio de sincronización local de SQL guardado",
+    syncDirectoryDisabled: "Sincronización local de SQL desactivada",
+    syncDirectoryFailed: "Error al definir el directorio de sincronización: {message}",
+    openDirectoryFailed: "Error al abrir el directorio: {message}",
+    noSyncDirectory: "Primero defina un directorio de sincronización local",
+    exported: "Exportado",
+    exportFailed: "Error al exportar: {message}",
+    importFailed: "Error al importar: {message}",
+    importNone: "No se encontraron archivos .sql en la carpeta seleccionada",
+    imported: "Se importaron {count} archivos SQL",
+    desktopOnly: "Esta función solo está disponible en escritorio",
+    noConnection: "No hay conexión disponible para importar",
+  },
+
   connection: {
     title: "Nueva conexión",
     name: "Nombre",
@@ -212,8 +238,7 @@ export default {
     jreNotInstalled: "El entorno JRE {jre} no está instalado. Instálelo desde el Administrador de controladores.",
     systemJavaNotFound: "No se encontró Java en el PATH del sistema. Instale Java o elija un ejecutable personalizado.",
     customJavaPathEmpty: "La ruta de Java personalizada está vacía. Elija un ejecutable de Java.",
-    jdbcPluginNotInstalled:
-      "El plugin JDBC no está instalado. Instale el plugin JDBC opcional para usar esta conexión.",
+    jdbcPluginNotInstalled: "El plugin JDBC no está instalado. Instale el plugin JDBC opcional para usar esta conexión.",
     lastError: "Error de conexión",
     clearError: "Limpiar error de conexión",
     saveFailed: "Error al guardar la conexión: {message}",
@@ -268,8 +293,7 @@ export default {
     jdbcUrl: "URL JDBC",
     jdbcUrlPlaceholder: "jdbc:postgresql://localhost:5432/base_de_datos",
     jdbcDriverClass: "Clase del driver (opcional)",
-    jdbcDriverClassPlaceholder:
-      "La mayoría de los drivers se registran automáticamente; usa com.vendor.jdbc.Driver si es necesario",
+    jdbcDriverClassPlaceholder: "La mayoría de los drivers se registran automáticamente; usa com.vendor.jdbc.Driver si es necesario",
     jdbcDriverPaths: "JARs del driver JDBC",
     jdbcDriverSelectPlaceholder: "Seleccionar driver importado",
     jdbcDriverPathsPlaceholder: "/ruta/al/driver.jar\n/ruta/a/otro-driver.jar",
@@ -278,8 +302,7 @@ export default {
     jdbcPluginHint: "Instala primero el plugin JDBC de DBX y luego importa el JAR del driver JDBC del proveedor.",
     dmCompatHint: "Requiere el driver ODBC DM8 instalado en el sistema.",
     dmDownload: "Descargar desde Dameng",
-    mongoLegacyHint:
-      "MongoDB inferior a 4.2 requiere el controlador MongoDB (Legacy) del Gestor de controladores; la conexión cambiará automáticamente.",
+    mongoLegacyHint: "MongoDB inferior a 4.2 requiere el controlador MongoDB (Legacy) del Gestor de controladores; la conexión cambiará automáticamente.",
     compatible: "Compatible",
     mainstream: "Popular",
     color: "Color",
@@ -596,8 +619,7 @@ export default {
     transposeMultiRowToggle: "Varias filas",
     transposeSingleRow: "Fila actual",
     transposeMultiRow: "Varias filas",
-    transposeMultiRowHint:
-      "Cuando está activado, la vista transpuesta muestra varias filas. Cuando está desactivado, solo muestra la fila actual.",
+    transposeMultiRowHint: "Cuando está activado, la vista transpuesta muestra varias filas. Cuando está desactivado, solo muestra la fila actual.",
     rowsPerPageShort: " filas",
     columnDetails: "Detalles de columna",
     tableInfoSearch: "Buscar...",
@@ -608,11 +630,9 @@ export default {
     commit: "Confirmar",
     rollback: "Revertir",
     transactionSaveHint: "Confirma {count} cambio(s) pendiente(s) en una transacción.",
-    nonTransactionalSaveHint:
-      "Guarda {count} cambio(s) pendiente(s) uno por uno. Si uno falla, los cambios anteriores correctos no se revierten.",
+    nonTransactionalSaveHint: "Guarda {count} cambio(s) pendiente(s) uno por uno. Si uno falla, los cambios anteriores correctos no se revierten.",
     keylessEditWarning: "Sin clave primaria",
-    keylessEditWarningHint:
-      "Esta tabla no tiene clave primaria. Las actualizaciones y eliminaciones usan todos los valores originales de la fila en WHERE; filas duplicadas exactas pueden verse afectadas juntas.",
+    keylessEditWarningHint: "Esta tabla no tiene clave primaria. Las actualizaciones y eliminaciones usan todos los valores originales de la fila en WHERE; filas duplicadas exactas pueden verse afectadas juntas.",
     sortUnsupported: "Este SQL no admite ordenamiento del resultado completo. Intenta con una consulta SELECT simple.",
     truncatedHint: "Los resultados están limitados a 10.000 filas. Usa LIMIT/OFFSET en tu consulta para paginar.",
   },
@@ -638,8 +658,7 @@ export default {
   },
   welcome: {
     title: "Espacio de trabajo de base de datos",
-    subtitle:
-      "Selecciona una conexión a la izquierda para explorar el esquema, o abre una pestaña de consulta directamente.",
+    subtitle: "Selecciona una conexión a la izquierda para explorar el esquema, o abre una pestaña de consulta directamente.",
     connections: "Conexiones",
     connected: "Conectado",
     databaseTypes: "Tipos de bases de datos",
@@ -652,8 +671,7 @@ export default {
     tipExecute: "para ejecutar la consulta",
     fileOpened: "Abierto {name}",
     mcpTitle: "Integración con agentes de IA",
-    mcpDescription:
-      "Además del asistente de IA integrado, puedes usar Claude Code, Cursor y otros agentes de programación para consultar tus bases de datos mediante MCP.",
+    mcpDescription: "Además del asistente de IA integrado, puedes usar Claude Code, Cursor y otros agentes de programación para consultar tus bases de datos mediante MCP.",
     mcpLearnMore: "Más información",
   },
   common: {
@@ -661,6 +679,7 @@ export default {
     loading: "Cargando...",
     stopping: "Deteniendo...",
     close: "Cerrar",
+    more: "Más",
   },
   explain: {
     title: "Plan de ejecución",
@@ -703,20 +722,13 @@ export default {
       sameName: "Mismo nombre",
     },
     description: {
-      foreignKeyIncoming:
-        "{target} apunta al campo actual mediante una clave foránea. Esta es una dependencia verificada.",
-      foreignKeyOutgoing:
-        "El campo actual referencia a {target} mediante una clave foránea. Esta es una dependencia verificada.",
-      viewLikely:
-        "La definición de la vista menciona tanto la tabla como el campo destino, lo que generalmente indica una dependencia de consulta.",
-      viewPossible:
-        "La definición de la vista menciona un campo con el mismo nombre pero no la tabla destino, por lo que requiere confirmación.",
-      historyLikely:
-        "Una sentencia SQL del historial menciona tanto la tabla como el campo destino. Úsala como contexto de análisis de impacto.",
-      historyPossible:
-        "Una sentencia SQL del historial menciona un campo con el mismo nombre. Puede estar relacionado pero requiere verificación.",
-      sameName:
-        "Otra tabla tiene un campo con el mismo nombre. Puede compartir significado de negocio, pero no es una dependencia verificada en la base de datos.",
+      foreignKeyIncoming: "{target} apunta al campo actual mediante una clave foránea. Esta es una dependencia verificada.",
+      foreignKeyOutgoing: "El campo actual referencia a {target} mediante una clave foránea. Esta es una dependencia verificada.",
+      viewLikely: "La definición de la vista menciona tanto la tabla como el campo destino, lo que generalmente indica una dependencia de consulta.",
+      viewPossible: "La definición de la vista menciona un campo con el mismo nombre pero no la tabla destino, por lo que requiere confirmación.",
+      historyLikely: "Una sentencia SQL del historial menciona tanto la tabla como el campo destino. Úsala como contexto de análisis de impacto.",
+      historyPossible: "Una sentencia SQL del historial menciona un campo con el mismo nombre. Puede estar relacionado pero requiere verificación.",
+      sameName: "Otra tabla tiene un campo con el mismo nombre. Puede compartir significado de negocio, pero no es una dependencia verificada en la base de datos.",
     },
     cancel: "Cancelar",
     refresh: "Analizar de nuevo",
@@ -757,8 +769,7 @@ export default {
   configExport: {
     passphraseTitle: "Cifrar y exportar",
     passphraseImportTitle: "Descifrar e importar",
-    passphraseExportHint:
-      "Para incluir las contraseñas de conexión en la exportación, define una frase de paso para el cifrado. Necesitarás la misma frase para importar.",
+    passphraseExportHint: "Para incluir las contraseñas de conexión en la exportación, define una frase de paso para el cifrado. Necesitarás la misma frase para importar.",
     passphraseImportHint: "Este archivo está cifrado. Ingresa la frase de paso para descifrarlo e importarlo.",
     passphrase: "Frase de paso",
     passphraseConfirm: "Confirmar frase de paso",
@@ -770,14 +781,12 @@ export default {
     exportEncrypted: "Exportar",
     decryptImport: "Descifrar e importar",
     wrongPassphrase: "Frase de paso incorrecta o archivo corrupto",
-    cryptoUnavailable:
-      "La importación cifrada no está disponible en este navegador. Usa HTTPS, localhost o DBX Desktop.",
+    cryptoUnavailable: "La importación cifrada no está disponible en este navegador. Usa HTTPS, localhost o DBX Desktop.",
     exportSuccess: "Conexiones exportadas exitosamente",
     importSuccess: "Se importaron {count} conexión(es)",
-    importNavicatSuccess:
-      "Se importaron {count} conexión(es) de Navicat. Completa la contraseña de las conexiones que aún la tengan vacía antes de probarlas.",
-    importDbeaverSuccess:
-      "Se importaron {count} conexión(es) de DBeaver. Completa la contraseña de las conexiones que aún la tengan vacía antes de probarlas.",
+    importNavicatSuccess: "Se importaron {count} conexión(es) de Navicat. Completa la contraseña de las conexiones que aún la tengan vacía antes de probarlas.",
+    importDatagripSuccess: "Se importaron {count} conexión(es) de DataGrip, se llenaron {filled} contraseña(s) del Keychain.",
+    importDbeaverSuccess: "Se importaron {count} conexión(es) de DBeaver. Completa la contraseña de las conexiones que aún la tengan vacía antes de probarlas.",
     importNone: "No hay nuevas conexiones para importar",
     importLayoutConfirm: "El archivo importado contiene grupos de conexiones. ¿Deseas aplicarlos?",
     importLayoutTitle: "Importar grupos",
@@ -819,8 +828,7 @@ export default {
     fixWithAi: "Corregir con IA",
     truncated: "Contexto truncado",
     contextSummary: "{database} · {tables} tablas",
-    autoSqlBlocked:
-      "El SQL generado por la IA parecía demasiado riesgoso para ejecutarse automáticamente. Revísalo manualmente antes de ejecutar.",
+    autoSqlBlocked: "El SQL generado por la IA parecía demasiado riesgoso para ejecutarse automáticamente. Revísalo manualmente antes de ejecutar.",
     proxy: "Proxy",
     proxyEnable: "Enviar solicitudes de IA mediante proxy",
     proxyUrl: "URL del proxy",
@@ -893,8 +901,7 @@ export default {
     structureDocYes: "Sí",
     structureDocNo: "No",
     structureDocCopied: "Estructura copiada",
-    structureDocCopyFallbackHint:
-      "La copia automática fue bloqueada. Haz clic en Copiar de nuevo o selecciona el contenido inferior.",
+    structureDocCopyFallbackHint: "La copia automática fue bloqueada. Haz clic en Copiar de nuevo o selecciona el contenido inferior.",
     saveStructure: "Guardar SQL",
     exportStructureCopied: "Estructura copiada",
     createTable: "Crear tabla",
@@ -904,8 +911,7 @@ export default {
     truncateTable: "Truncar tabla",
     duplicateStructure: "Clonar como tabla nueva",
     confirmDropTableTitle: "Eliminar tabla",
-    confirmDropTableMessage:
-      '¿Estás seguro de que deseas eliminar "{name}"? Esto borrará permanentemente la tabla y todos sus datos.',
+    confirmDropTableMessage: '¿Estás seguro de que deseas eliminar "{name}"? Esto borrará permanentemente la tabla y todos sus datos.',
     confirmEmptyTableTitle: "Vaciar tabla",
     confirmEmptyTableMessage: '¿Estás seguro de que deseas eliminar todos los datos de "{name}"?',
     confirmTruncateTableTitle: "Truncar tabla",
@@ -923,11 +929,9 @@ export default {
     batchDrop: "Eliminar seleccionados ({count})",
     executeProcedure: "Ejecutar procedimiento",
     confirmExecuteProcedureTitle: "Ejecutar procedimiento",
-    confirmExecuteProcedureMessage:
-      '¿Ejecutar el procedimiento "{name}"? Puedes completar o ajustar los valores de los parámetros primero.',
+    confirmExecuteProcedureMessage: '¿Ejecutar el procedimiento "{name}"? Puedes completar o ajustar los valores de los parámetros primero.',
     loadingProcedureParameters: "Cargando parámetros...",
-    procedureParametersUnavailable:
-      "No se pudo cargar la metadata de parámetros. Aún puedes editar el SQL inferior y ejecutarlo.",
+    procedureParametersUnavailable: "No se pudo cargar la metadata de parámetros. Aún puedes editar el SQL inferior y ejecutarlo.",
     noProcedureParameters: "No se encontraron parámetros. El SQL actual se ejecutará tal como se muestra.",
     inputParameters: "{count} parámetros de entrada",
     outputParameters: "{count} parámetros de salida",
@@ -937,8 +941,7 @@ export default {
     parameterValue: "Value",
     parameterNull: "NULL",
     parameterDefault: "DEFAULT",
-    parameterDefaultHint:
-      "Cuando DEFAULT está marcado, DBX omite ese argumento para que la base de datos use el valor predeterminado.",
+    parameterDefaultHint: "Cuando DEFAULT está marcado, DBX omite ese argumento para que la base de datos use el valor predeterminado.",
     parameterValuePlaceholder: "Ingresa un valor",
     outputOnly: "Solo salida",
     sqlPreview: "Vista previa SQL",
@@ -956,8 +959,7 @@ export default {
     confirmDropTriggerTitle: "Eliminar disparador",
     confirmDropTableChildObjectMessage: '¿Seguro que deseas eliminar "{name}" de "{table}"?',
     confirmBatchDropTitle: "Eliminar objetos seleccionados",
-    confirmBatchDropMessage:
-      "¿Seguro que deseas eliminar {count} objetos seleccionados? Esta acción no se puede deshacer.",
+    confirmBatchDropMessage: "¿Seguro que deseas eliminar {count} objetos seleccionados? Esta acción no se puede deshacer.",
     confirmDropProcedureTitle: "Eliminar procedimiento",
     confirmDropProcedureMessage: '¿Seguro que deseas eliminar el procedimiento "{name}"?',
     confirmDropFunctionTitle: "Eliminar función",
@@ -977,8 +979,7 @@ export default {
     createDuckDbFile: "Crear archivo de base de datos",
     dropDatabase: "Eliminar base de datos",
     confirmDropDatabaseTitle: "Eliminar base de datos",
-    confirmDropDatabaseMessage:
-      '¿Estás seguro de que deseas eliminar la base de datos "{name}"? Esto borrará permanentemente la base de datos y todos sus datos.',
+    confirmDropDatabaseMessage: '¿Estás seguro de que deseas eliminar la base de datos "{name}"? Esto borrará permanentemente la base de datos y todos sus datos.',
     createDatabaseSuccess: 'Base de datos "{name}" creada',
     createDuckDbFileSuccess: 'Archivo de base de datos DuckDB "{name}" creado y adjuntado',
     createDuckDbFileDesktopOnly: "Crear archivos de base de datos DuckDB solo está disponible en la app de escritorio",
@@ -987,8 +988,7 @@ export default {
     createSchema: "Crear esquema",
     dropSchema: "Eliminar esquema",
     confirmDropSchemaTitle: "Eliminar esquema",
-    confirmDropSchemaMessage:
-      '¿Estás seguro de que deseas eliminar el esquema "{name}"? Esto borrará permanentemente el esquema y todos sus objetos.',
+    confirmDropSchemaMessage: '¿Estás seguro de que deseas eliminar el esquema "{name}"? Esto borrará permanentemente el esquema y todos sus objetos.',
     createSchemaSuccess: 'Esquema "{name}" creado',
     dropSchemaSuccess: 'Esquema "{name}" eliminado',
     createSchemaNamePlaceholder: "Nombre del esquema",
@@ -1003,6 +1003,7 @@ export default {
     showAll: "Mostrar todo",
     showSystemDatabases: "Mostrar bases de datos del sistema",
     save: "Guardar",
+    emptySelection: "Selecciona al menos una base de datos, o usa Mostrar todo para quitar el filtro.",
     loadFailed: "No se pudieron cargar las bases de datos: {message}",
   },
   tree: {
@@ -1058,8 +1059,7 @@ export default {
     dropSelected: "Eliminar seleccionadas",
     clearSelection: "Limpiar selección",
     confirmBatchDropTitle: "Eliminar tablas seleccionadas",
-    confirmBatchDropMessage:
-      "¿Seguro que quieres eliminar {count} tablas seleccionadas? Esta acción no se puede deshacer.",
+    confirmBatchDropMessage: "¿Seguro que quieres eliminar {count} tablas seleccionadas? Esta acción no se puede deshacer.",
     batchDropSuccess: "{count} tablas eliminadas",
   },
   structureEditor: {
@@ -1183,14 +1183,12 @@ export default {
     columnValue: "Valor",
     columnSize: "Tamaño",
     columnTTL: "TTL",
-    binaryStringReadonlyHint:
-      "Los valores de cadena binaria se muestran como texto escapado en modo de solo lectura; la edición de bytes sin procesar no está disponible.",
+    binaryStringReadonlyHint: "Los valores de cadena binaria se muestran como texto escapado en modo de solo lectura; la edición de bytes sin procesar no está disponible.",
     selectedKeys: "Claves seleccionadas",
     deleteGroup: "Eliminar grupo",
     deleteGroupDetails: "{target}\n{count} claves",
     flushDb: "Limpiar DB actual",
-    flushDbMessage:
-      "Esto eliminará todas las claves de la base de datos Redis actual y no se puede deshacer. ¿Continuar?",
+    flushDbMessage: "Esto eliminará todas las claves de la base de datos Redis actual y no se puede deshacer. ¿Continuar?",
     flushDbDetails: "Destino: Redis db{db}\nAlcance: todas las claves de la DB actual",
     flushDbConfirm: "Limpiar DB",
     flushDbSuccess: "Redis db{db} limpiada",
@@ -1214,7 +1212,14 @@ export default {
     createField: "Campo",
     createFieldPlaceholder: "name",
     createScore: "Puntuación",
+    createKeyTtl: "TTL (segundos)",
+    createKeyTtlPlaceholder: "vacío = sin expiración",
+    createKeyAddEntry: "Agregar entrada",
+    createKeyEntryId: "ID de entrada",
+    createKeyRawMode: "Entrada bruta",
+    createKeyEntries: "Entradas",
     createValuePlaceholder: "valor",
+    jsonModuleNotAvailable: "El módulo ReJSON no está cargado en este servidor Redis",
     createKeySubmit: "Crear",
     createKeyNameRequired: "Ingresa una clave",
     createFieldRequired: "Ingresa un campo hash",
@@ -1232,6 +1237,8 @@ export default {
     jsonView: "Vista JSON",
     rawContent: "Contenido original",
     wordWrap: "Ajuste de línea",
+    clearHistory: "Borrar historial de comandos",
+    historyCleared: "Historial de comandos Redis borrado",
   },
   mongo: {
     documents: "{count} documentos",
@@ -1284,6 +1291,7 @@ export default {
       schema_change: "Cambio de esquema",
       import: "Importación",
       transfer: "Transferencia",
+      redis_command: "Comando Redis",
     },
     kindShort: {
       query: "SQL",
@@ -1291,6 +1299,7 @@ export default {
       schema_change: "DDL",
       import: "Import",
       transfer: "Mover",
+      redis_command: "Redis",
     },
     detail: {
       kind: "Tipo",
@@ -1308,15 +1317,12 @@ export default {
   },
   dangerDialog: {
     title: "Operación peligrosa",
-    message:
-      "Esta sentencia SQL puede modificar o eliminar datos de forma irreversible. ¿Estás seguro de que deseas ejecutarla?",
+    message: "Esta sentencia SQL puede modificar o eliminar datos de forma irreversible. ¿Estás seguro de que deseas ejecutarla?",
     suppressFuturePrompts: "No volver a preguntar para SQL peligroso",
     deleteMessage: "Esta operación de eliminación puede ser irreversible. ¿Continuar?",
     deleteConfirm: "Confirmar eliminación",
-    deleteRowMessage:
-      "Esta fila quedará marcada para eliminación y se borrará de la base de datos al guardar. ¿Continuar?",
-    deleteRowsMessage:
-      "Estas {count} filas se marcarán para eliminación y se eliminarán de la base de datos después de guardar. ¿Continuar?",
+    deleteRowMessage: "Esta fila quedará marcada para eliminación y se borrará de la base de datos al guardar. ¿Continuar?",
+    deleteRowsMessage: "Estas {count} filas se marcarán para eliminación y se eliminarán de la base de datos después de guardar. ¿Continuar?",
     deleteRowDetails: "Tabla: {table}",
     deleteRowDetailsNoTable: "Fila actual del resultado",
     redisKeyDetails: "Clave Redis: {key}",
@@ -1463,14 +1469,12 @@ export default {
     missingTargetTables: "Faltan tablas de destino con el mismo nombre: {tables}",
     keyColumns: "Columnas clave",
     keyColumnsPlaceholder: "Columnas primarias o únicas separadas por comas",
-    keyColumnsAutoHint:
-      "Déjalo vacío para detectar claves primarias automáticamente en comparación simple o por tabla en lote.",
+    keyColumnsAutoHint: "Déjalo vacío para detectar claves primarias automáticamente en comparación simple o por tabla en lote.",
     rowCounts: "Origen {source} filas, destino {target} filas; comparación completa terminada",
     previewLimitOption: "Vista previa {count}",
     compare: "Comparar datos",
     summary: "Agregadas {added}, eliminadas {removed}, modificadas {modified}",
-    batchSummary:
-      "Se compararon {tables} tablas: {different} con diferencias, {same} iguales, {failed} con error; agregadas {added}, eliminadas {removed}, modificadas {modified}",
+    batchSummary: "Se compararon {tables} tablas: {different} con diferencias, {same} iguales, {failed} con error; agregadas {added}, eliminadas {removed}, modificadas {modified}",
     comparingTable: "Comparando {current}/{total}: {table}",
     keyColumnsInline: "Columnas clave: {columns}",
     selectedInline: "Seleccionadas {selected}/{total}",
@@ -1483,8 +1487,7 @@ export default {
     remainingRows: "Quedan {count} filas fuera de la vista previa",
     planningSync: "Actualizando el plan de sincronización...",
     noSelectedDifferences: "No hay diferencias seleccionadas para ejecutar",
-    planSummary:
-      "Plan: {inserts} inserciones, {updates} actualizaciones, {deletes} eliminaciones, {statements} sentencias",
+    planSummary: "Plan: {inserts} inserciones, {updates} actualizaciones, {deletes} eliminaciones, {statements} sentencias",
     statusDifferent: "Con diferencias",
     statusSame: "Igual",
     statusError: "Error",
@@ -1492,8 +1495,7 @@ export default {
     missingKeyColumns: "Las columnas clave deben existir en las tablas de origen y destino: {columns}",
     noCommonColumns: "Las tablas de origen y destino no tienen columnas en común para comparar",
     targetTableMissing: "No se encontró la tabla de destino: {table}",
-    noComparableTables:
-      "No se encontraron tablas comparables. Verifica si existen tablas de destino con el mismo nombre.",
+    noComparableTables: "No se encontraron tablas comparables. Verifica si existen tablas de destino con el mismo nombre.",
     noDifferences: "Los datos son idénticos, no se necesita SQL de sincronización",
     syncSuccess: "Sincronización de datos ejecutada exitosamente",
   },
@@ -1563,8 +1565,7 @@ export default {
     languageTitle: "Idioma / Language",
     fontSize: "Tamaño de fuente",
     uiScale: "Escala de interfaz",
-    uiScaleDescription:
-      "Escala toda la interfaz de escritorio para pantallas de alta densidad. Los cambios se aplican al instante y se restauran al volver a abrir.",
+    uiScaleDescription: "Escala toda la interfaz de escritorio para pantallas de alta densidad. Los cambios se aplican al instante y se restauran al volver a abrir.",
     theme: "Tema",
     selectTheme: "Seleccionar tema...",
     appLayout: "Diseño de la interfaz",
@@ -1578,14 +1579,11 @@ export default {
     iconThemeBlack: "Negro",
     iconThemeBlackDescription: "Usar la marca negra de DBX en ventana, bandeja y logo.",
     showTrayIcon: "Mostrar icono en bandeja/barra de menú",
-    showTrayIconDescription:
-      "Si está desactivado, no se muestra el icono, pero cerrar la ventana sigue ocultando DBX en segundo plano como antes.",
+    showTrayIconDescription: "Si está desactivado, no se muestra el icono, pero cerrar la ventana sigue ocultando DBX en segundo plano como antes.",
     updateNotificationsEnabled: "Activar recordatorios de actualización",
-    updateNotificationsEnabledDescription:
-      "Al desactivarlo, DBX no comprobará automáticamente actualizaciones de la app ni de los controladores, ni mostrará indicadores. Las comprobaciones manuales siguen disponibles.",
+    updateNotificationsEnabledDescription: "Al desactivarlo, DBX no comprobará automáticamente actualizaciones de la app ni de los controladores, ni mostrará indicadores. Las comprobaciones manuales siguen disponibles.",
     debugLoggingEnabled: "Activar logs de depuración",
-    debugLoggingEnabledDescription:
-      "Registra logs de diagnóstico locales del lado del usuario al investigar reportes. Desactivado por defecto.",
+    debugLoggingEnabledDescription: "Registra logs de diagnóstico locales del lado del usuario al investigar reportes. Desactivado por defecto.",
     debugLogsCopy: "Copiar logs",
     debugLogsCopied: "Copiado",
     debugLogsDownload: "Descargar logs",
@@ -1593,14 +1591,11 @@ export default {
     debugLogsClear: "Borrar logs",
     dataGridDisplay: "Visualización de la tabla",
     showColumnCommentsInHeader: "Mostrar comentarios bajo los nombres",
-    showColumnCommentsInHeaderDescription:
-      "Muestra los comentarios de columnas directamente debajo del nombre de la columna.",
+    showColumnCommentsInHeaderDescription: "Muestra los comentarios de columnas directamente debajo del nombre de la columna.",
     showColumnTypesInHeader: "Mostrar tipos de columna bajo los nombres",
-    showColumnTypesInHeaderDescription:
-      "Muestra el tipo de dato de cada columna directamente debajo del nombre de la columna.",
+    showColumnTypesInHeaderDescription: "Muestra el tipo de dato de cada columna directamente debajo del nombre de la columna.",
     compactColumnHeaderActions: "Compactar herramientas del encabezado",
-    compactColumnHeaderActionsDescription:
-      "Mueve formatear y filtrar a un menú de más acciones para priorizar el nombre de columna.",
+    compactColumnHeaderActionsDescription: "Mueve formatear y filtrar a un menú de más acciones para priorizar el nombre de columna.",
     sidebarActivation: "Activación de la barra lateral",
     sidebarActivationSingle: "Un clic",
     sidebarActivationSingleDescription: "Abrir elementos accionables de la barra lateral con un clic.",
@@ -1608,39 +1603,28 @@ export default {
     sidebarActivationDoubleDescription: "Un clic selecciona la fila; doble clic abre elementos.",
     sidebarObjectDisplay: "Diseño de objetos en la barra lateral",
     sidebarObjectDisplayGrouped: "Vista avanzada",
-    sidebarObjectDisplayGroupedDescription:
-      "Agrupa objetos por tablas, vistas, procedimientos y funciones para bases con más tipos de objeto.",
+    sidebarObjectDisplayGroupedDescription: "Agrupa objetos por tablas, vistas, procedimientos y funciones para bases con más tipos de objeto.",
     sidebarObjectDisplaySimple: "Vista simple",
-    sidebarObjectDisplaySimpleDescription:
-      "Muestra tablas y vistas directamente bajo cada base de datos o esquema para reducir niveles intermedios.",
+    sidebarObjectDisplaySimpleDescription: "Muestra tablas y vistas directamente bajo cada base de datos o esquema para reducir niveles intermedios.",
     autoSelectActiveSidebarNode: "Seleccionar siempre el elemento abierto",
-    autoSelectActiveSidebarNodeDescription:
-      "Al cambiar de pestaña, selecciona la tabla, colección o archivo SQL visible correspondiente en la barra lateral.",
+    autoSelectActiveSidebarNodeDescription: "Al cambiar de pestaña, selecciona la tabla, colección o archivo SQL visible correspondiente en la barra lateral.",
     disconnectTabHandlingMode: "Pestañas tras desconectar",
-    disconnectTabHandlingModeDescription:
-      "Elige cómo conservar las pestañas relacionadas al cerrar una conexión o base de datos.",
+    disconnectTabHandlingModeDescription: "Elige cómo conservar las pestañas relacionadas al cerrar una conexión o base de datos.",
     disconnectTabHandlingModeCloseTabs: "Cerrar todas las pestañas",
-    disconnectTabHandlingModeCloseTabsDescription:
-      "Cierra todas las pestañas relacionadas de la conexión o base de datos.",
+    disconnectTabHandlingModeCloseTabsDescription: "Cierra todas las pestañas relacionadas de la conexión o base de datos.",
     disconnectTabHandlingModeKeepTabsClearResults: "Cerrar objetos y conservar SQL",
-    disconnectTabHandlingModeKeepTabsClearResultsDescription:
-      "Cierra pestañas de datos, explorador de objetos y estructura, conserva las pestañas SQL y limpia el estado de ejecución y las sesiones.",
+    disconnectTabHandlingModeKeepTabsClearResultsDescription: "Cierra pestañas de datos, explorador de objetos y estructura, conserva las pestañas SQL y limpia el estado de ejecución y las sesiones.",
     disconnectTabHandlingModeKeepTabsKeepResults: "No cerrar pestañas relacionadas",
-    disconnectTabHandlingModeKeepTabsKeepResultsDescription:
-      "Conserva las pestañas relacionadas, el texto SQL y los resultados actuales sin limpieza adicional.",
+    disconnectTabHandlingModeKeepTabsKeepResultsDescription: "Conserva las pestañas relacionadas, el texto SQL y los resultados actuales sin limpieza adicional.",
     reuseDataTab: "Reutilizar pestaña de datos",
-    reuseDataTabDescription:
-      "Al hacer clic en una tabla en la barra lateral, reutiliza la pestaña de datos existente en lugar de crear una nueva cada vez.",
+    reuseDataTabDescription: "Al hacer clic en una tabla en la barra lateral, reutiliza la pestaña de datos existente en lugar de crear una nueva cada vez.",
     sidebarHiddenTablePrefixes: "Prefijos ocultos de tablas",
-    sidebarHiddenTablePrefixesDescription:
-      "Un prefijo por linea. Solo acorta etiquetas de tablas, vistas y colecciones en la barra lateral; las acciones y ayudas usan el nombre completo.",
+    sidebarHiddenTablePrefixesDescription: "Un prefijo por linea. Solo acorta etiquetas de tablas, vistas y colecciones en la barra lateral; las acciones y ayudas usan el nombre completo.",
     sidebarHiddenTablePrefixesPlaceholder: "Ejemplo:\nODS_\nT8Y2_LONG_",
     sidebarHideTableComments: "Ocultar comentarios de tablas en la barra lateral",
-    sidebarHideTableCommentsDescription:
-      "Oculta los comentarios de tablas/vistas junto a los nombres en el árbol de la barra lateral para ahorrar espacio horizontal.",
+    sidebarHideTableCommentsDescription: "Oculta los comentarios de tablas/vistas junto a los nombres en el árbol de la barra lateral para ahorrar espacio horizontal.",
     sidebarAllowHorizontalScroll: "Permitir desplazamiento horizontal lateral",
-    sidebarAllowHorizontalScrollDescription:
-      "Muestra completos los nombres largos de tablas, vistas y colecciones permitiendo desplazamiento horizontal en la barra lateral.",
+    sidebarAllowHorizontalScrollDescription: "Muestra completos los nombres largos de tablas, vistas y colecciones permitiendo desplazamiento horizontal en la barra lateral.",
     snippetsDescription: "Personaliza plantillas SQL activadas en el editor.",
     snippetsAdd: "Agregar fragmento",
     snippetsLabel: "Etiqueta",
@@ -1661,18 +1645,14 @@ export default {
     syncClearSavedPassword: "Borrar contraseña guardada",
     syncRememberWebDavPassword: "Recordar contraseña de app WebDAV",
     syncSavedPassword: "(guardada)",
-    syncRememberWebDavPasswordDescription:
-      "La contraseña se cifra y se guarda solo en este dispositivo. No se sincroniza a WebDAV ni reemplaza la contraseña de sync.",
+    syncRememberWebDavPasswordDescription: "La contraseña se cifra y se guarda solo en este dispositivo. No se sincroniza a WebDAV ni reemplaza la contraseña de sync.",
     syncRemotePath: "Ruta remota",
     syncRemotePathDescription: "DBX creará las carpetas padre faltantes al subir.",
-    syncSecretNotice:
-      "De forma predeterminada, DBX solo sincroniza detalles de conexión y ajustes. Las contraseñas de base de datos, SSH, proxy, cadenas de conexión y API keys de IA quedan locales.",
+    syncSecretNotice: "De forma predeterminada, DBX solo sincroniza detalles de conexión y ajustes. Las contraseñas de base de datos, SSH, proxy, cadenas de conexión y API keys de IA quedan locales.",
     syncSecrets: "Sincronizar secretos cifrados",
-    syncSecretsDescription:
-      "Al activarlo, DBX cifra contraseñas de base de datos, contraseñas SSH y API keys de IA antes de subirlas a WebDAV.",
+    syncSecretsDescription: "Al activarlo, DBX cifra contraseñas de base de datos, contraseñas SSH y API keys de IA antes de subirlas a WebDAV.",
     syncSecretsPassphrase: "Contraseña de sync",
-    syncSecretsPassphraseDescription:
-      "Esta contraseña solo se usa para cifrar y restaurar datos sensibles. DBX no la guarda; tendrás que ingresarla en cada dispositivo.",
+    syncSecretsPassphraseDescription: "Esta contraseña solo se usa para cifrar y restaurar datos sensibles. DBX no la guarda; tendrás que ingresarla en cada dispositivo.",
     syncTest: "Probar",
     syncUpload: "Subir",
     syncDownload: "Descargar",
@@ -1681,8 +1661,7 @@ export default {
     syncDownloadSuccess: "Se descargaron y aplicaron {bytes} bytes desde {path}.",
     syncSecretsApplied: "Los secretos cifrados fueron restaurados.",
     syncSecretsSkipped: "Había secretos cifrados, pero no fueron restaurados.",
-    syncDownloadConfirm:
-      "¿Descargar y aplicar la instantánea remota de DBX? Se reemplazarán metadatos locales y SQL guardado.",
+    syncDownloadConfirm: "¿Descargar y aplicar la instantánea remota de DBX? Se reemplazarán metadatos locales y SQL guardado.",
     apply: "Aplicar",
     applyAndClose: "Aplicar y cerrar",
     reset: "Restablecer",
@@ -1693,8 +1672,7 @@ export default {
     wordWrap: "Ajuste de línea",
     wordWrapDescription: "Ajustar las líneas largas de SQL al ancho del editor",
     confirmDangerousSqlExecution: "Confirmar antes de SQL peligroso",
-    confirmDangerousSqlExecutionDescription:
-      "Cuando se desactiva, ALTER, DROP, DELETE, TRUNCATE y otras sentencias peligrosas se ejecutan sin el diálogo de advertencia.",
+    confirmDangerousSqlExecutionDescription: "Cuando se desactiva, ALTER, DROP, DELETE, TRUNCATE y otras sentencias peligrosas se ejecutan sin el diálogo de advertencia.",
     redisScanPageSize: "Cantidad de escaneo Redis",
     redisScanPageSizeDescription: "Claves solicitadas por página SCAN al explorar claves Redis.",
     redisScanPageSizeOption: "{count} claves",
@@ -1725,6 +1703,7 @@ export default {
     shortcutScopeSearch: "Campos de búsqueda",
     shortcutPressShortcut: "Presiona un atajo",
     shortcutConflict: "Este atajo entra en conflicto con otra acción del mismo ámbito.",
+    shortcutClear: "Borrar atajo",
     preview: "Vista previa en tiempo real",
     customTheme: "Tema personalizado",
     customThemeConfigure: "Configurar tema personalizado",
@@ -1795,11 +1774,9 @@ export default {
     mcpCodexConfig: "Configuración de Codex",
     mcpCodexConfigPath: "Codex puede usar ~/.codex/config.toml o .codex/config.toml dentro del proyecto.",
     mcpReadonlyMode: "Modo solo lectura",
-    mcpReadonlyModeDescription:
-      "Añade DBX_MCP_ALLOW_WRITES=0 al ejemplo de configuración para que la sesión MCP solo permita consultas.",
+    mcpReadonlyModeDescription: "Añade DBX_MCP_ALLOW_WRITES=0 al ejemplo de configuración para que la sesión MCP solo permita consultas.",
     mcpAllowDangerous: "Permitir SQL peligroso",
-    mcpAllowDangerousDescription:
-      "Añade DBX_MCP_ALLOW_DANGEROUS_SQL=1 al ejemplo de configuración para permitir DROP, TRUNCATE, ALTER y sentencias similares.",
+    mcpAllowDangerousDescription: "Añade DBX_MCP_ALLOW_DANGEROUS_SQL=1 al ejemplo de configuración para permitir DROP, TRUNCATE, ALTER y sentencias similares.",
     mcpDetectionTiming: "DBX comprueba automáticamente al abrir esta página; usa Comprobar de nuevo para actualizar.",
     mcpNpmBoundary: "DBX solo comprueba y explica el estado de MCP; la instalación y actualización siguen usando npm.",
     mcpRefresh: "Comprobar de nuevo",

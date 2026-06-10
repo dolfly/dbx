@@ -13,23 +13,7 @@ const ROUTINE_OBJECTS: SidebarObjectKind[] = ["TABLE", "VIEW", "PROCEDURE", "FUN
 const POSTGRES_OBJECTS: SidebarObjectKind[] = ["TABLE", "VIEW", "PROCEDURE", "FUNCTION", "SEQUENCE"];
 const ORACLE_OBJECTS: SidebarObjectKind[] = ["TABLE", "VIEW", "PROCEDURE", "FUNCTION", "PACKAGE", "PACKAGE_BODY"];
 
-const TABLE_VIEW_ONLY_TYPES = new Set<DatabaseType>([
-  "sqlite",
-  "rqlite",
-  "duckdb",
-  "clickhouse",
-  "doris",
-  "starrocks",
-  "databend",
-  "hive",
-  "trino",
-  "cassandra",
-  "bigquery",
-  "kylin",
-  "tdengine",
-  "iotdb",
-  "neo4j",
-]);
+const TABLE_VIEW_ONLY_TYPES = new Set<DatabaseType>(["sqlite", "rqlite", "turso", "duckdb", "clickhouse", "doris", "starrocks", "databend", "hive", "trino", "cassandra", "bigquery", "kylin", "tdengine", "iotdb", "neo4j"]);
 
 const ORACLE_PACKAGE_TYPES = new Set<DatabaseType>(["oracle", "oceanbase-oracle"]);
 const POSTGRES_SEQUENCE_TYPES = new Set<DatabaseType>(["postgres", "gaussdb", "kwdb", "opengauss"]);

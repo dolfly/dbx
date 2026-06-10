@@ -3,6 +3,7 @@ export type DatabaseType =
   | "postgres"
   | "sqlite"
   | "rqlite"
+  | "turso"
   | "redis"
   | "duckdb"
   | "clickhouse"
@@ -248,6 +249,11 @@ export interface QueryResult {
    * fallback query paths, older backends). Consumers must tolerate gaps.
    */
   column_types?: string[];
+  /**
+   * Sortable for each column. Parallel to `columns`. Optional and may
+   * be shorter/empty when a driver cannot supply sortable information.
+   */
+  column_sortables?: boolean[];
   rows: (string | number | boolean | null)[][];
   affected_rows: number;
   execution_time_ms: number;
@@ -324,9 +330,7 @@ export interface ConnectionGroup {
   collapsed: boolean;
 }
 
-export type SidebarOrderEntry =
-  | { type: "group"; id: string; connectionIds: string[] }
-  | { type: "connection"; id: string };
+export type SidebarOrderEntry = { type: "group"; id: string; connectionIds: string[] } | { type: "connection"; id: string };
 
 export interface SidebarLayout {
   groups: ConnectionGroup[];
@@ -391,6 +395,15 @@ export interface QueryTab {
   lastExplainedSql?: string;
   isExecuting: boolean;
   isCancelling?: boolean;
+  queryExecutionStartedAt?: number;
+  editorViewport?: {
+    scrollTop: number;
+    scrollLeft: number;
+  };
+  editorSelection?: {
+    anchor: number;
+    head: number;
+  };
   executionId?: string;
   isExplaining?: boolean;
   explainExecutionId?: string;
@@ -426,19 +439,7 @@ export interface QueryTab {
     }[];
   };
   querySourceColumns?: Array<string | undefined>;
-  queryEditabilityReason?:
-    | "not-select"
-    | "cte"
-    | "set-operation"
-    | "aggregation"
-    | "external-source"
-    | "complex-source"
-    | "computed-columns"
-    | "no-table"
-    | "no-primary-key"
-    | "primary-key-not-returned"
-    | "aliased-columns"
-    | "metadata-unavailable";
+  queryEditabilityReason?: "not-select" | "cte" | "set-operation" | "aggregation" | "external-source" | "complex-source" | "computed-columns" | "no-table" | "no-primary-key" | "primary-key-not-returned" | "aliased-columns" | "metadata-unavailable";
   resultEvicted?: boolean;
   whereInput?: string;
 }
@@ -447,6 +448,7 @@ export interface SavedSqlFolder {
   id: string;
   connectionId: string;
   name: string;
+  orderIndex?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -459,6 +461,7 @@ export interface SavedSqlFile {
   database: string;
   schema?: string;
   sql: string;
+  orderIndex?: number;
   createdAt: string;
   updatedAt: string;
 }

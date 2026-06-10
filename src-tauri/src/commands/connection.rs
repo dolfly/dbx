@@ -3,7 +3,7 @@ use tauri::State;
 
 pub use dbx_core::agent_connection::{
     agent_connect_params, mongo_legacy_error_with_auth_hint, oracle_alternate_connect_config,
-    oracle_auth_fallback_profiles, should_retry_oracle_with_10g_driver,
+    oracle_auth_fallback_profiles, oracle_error_with_driver_hint, should_retry_oracle_with_10g_driver,
 };
 pub use dbx_core::connection::{
     connect_bare_metadata_pool, connect_mysql_metadata_pool, connection_url_for_endpoint, metadata_connection_config,
@@ -85,7 +85,7 @@ async fn test_agent_connection(
                 ));
             }
         } else {
-            return Err(err);
+            return Err(oracle_error_with_driver_hint(config, &err));
         }
     }
 
@@ -142,7 +142,7 @@ async fn connect_agent_pool(
                 format!("{err}\n\nFallback with legacy Oracle drivers failed: {}", fallback_errors.join("\n"))
             })?;
         } else {
-            return Err(err);
+            return Err(oracle_error_with_driver_hint(config, &err));
         }
     }
 
@@ -400,6 +400,31 @@ pub async fn test_connection(state: State<'_, Arc<AppState>>, config: Connection
                     .await
                     .map(|_| "Connection successful".to_string())
             }
+            DatabaseType::Turso => {
+                let auth_token = if !config.password.is_empty() {
+                    config.password.clone()
+                } else {
+                    config
+                        .url_params
+                        .as_deref()
+                        .and_then(|p| {
+                            p.trim()
+                                .trim_start_matches('?')
+                                .split('&')
+                                .filter_map(|pair| pair.split_once('='))
+                                .find(|(key, _)| {
+                                    let k = key.trim().to_ascii_lowercase();
+                                    k == "auth_token" || k == "authtoken" || k == "auth-token"
+                                })
+                                .map(|(_, value)| value.trim().to_string())
+                        })
+                        .unwrap_or_default()
+                };
+                let client = db::turso_driver::TursoClient::new(&url, &auth_token, config.ssl, connect_timeout)?;
+                db::turso_driver::test_connection(&client, connect_timeout)
+                    .await
+                    .map(|_| "Connection successful".to_string())
+            }
             db_type if database_capabilities::is_agent_type(&db_type) => {
                 test_agent_connection(state.inner(), &config, &host, port).await
             }
@@ -567,6 +592,30 @@ pub async fn connect_db(state: State<'_, Arc<AppState>>, config: ConnectionConfi
             db::rqlite_driver::test_connection(&client, connect_timeout).await?;
             PoolKind::Rqlite(client)
         }
+        DatabaseType::Turso => {
+            let auth_token = if !db_config.password.is_empty() {
+                db_config.password.clone()
+            } else {
+                db_config
+                    .url_params
+                    .as_deref()
+                    .and_then(|p| {
+                        p.trim()
+                            .trim_start_matches('?')
+                            .split('&')
+                            .filter_map(|pair| pair.split_once('='))
+                            .find(|(key, _)| {
+                                let k = key.trim().to_ascii_lowercase();
+                                k == "auth_token" || k == "authtoken" || k == "auth-token"
+                            })
+                            .map(|(_, value)| value.trim().to_string())
+                    })
+                    .unwrap_or_default()
+            };
+            let client = db::turso_driver::TursoClient::new(&url, &auth_token, db_config.ssl, connect_timeout)?;
+            db::turso_driver::test_connection(&client, connect_timeout).await?;
+            PoolKind::Turso(client)
+        }
         db_type if database_capabilities::is_agent_type(&db_type) => {
             connect_agent_pool(state.inner(), &db_config, &host, port).await?
         }
@@ -610,6 +659,9 @@ pub async fn disconnect_db(state: State<'_, Arc<AppState>>, connection_id: Strin
     }
     drop(conns);
     state.reset_connection_transport(&connection_id).await;
+    if connection_id.starts_with("__visible_draft_") {
+        state.configs.write().await.remove(&connection_id);
+    }
     Ok(())
 }
 

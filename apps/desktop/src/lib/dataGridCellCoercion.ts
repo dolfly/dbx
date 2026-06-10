@@ -24,11 +24,7 @@ export function coerceDataGridCellValue(options: CoerceDataGridCellValueOptions)
   return normalizeSmartQuotedJsonInput(value);
 }
 
-export function dataGridCellEditorText(options: {
-  value: GridCellValue | undefined;
-  databaseType: DatabaseType | undefined;
-  columnInfo: Pick<ColumnInfo, "data_type"> | undefined;
-}): string {
+export function dataGridCellEditorText(options: { value: GridCellValue | undefined; databaseType: DatabaseType | undefined; columnInfo: Pick<ColumnInfo, "data_type"> | undefined }): string {
   const value = options.value ?? null;
   if (value === null) return "";
   if (Array.isArray(value) && options.databaseType === "postgres" && isPostgresArrayColumn(options.columnInfo, value)) {
@@ -37,16 +33,8 @@ export function dataGridCellEditorText(options: {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
-export function dataGridCellDisplayText(options: {
-  value: GridCellValue;
-  databaseType: DatabaseType | undefined;
-  columnInfo: Pick<ColumnInfo, "data_type"> | undefined;
-}): string | undefined {
-  if (
-    Array.isArray(options.value) &&
-    options.databaseType === "postgres" &&
-    isPostgresArrayColumn(options.columnInfo, options.value)
-  ) {
+export function dataGridCellDisplayText(options: { value: GridCellValue; databaseType: DatabaseType | undefined; columnInfo: Pick<ColumnInfo, "data_type"> | undefined }): string | undefined {
+  if (Array.isArray(options.value) && options.databaseType === "postgres" && isPostgresArrayColumn(options.columnInfo, options.value)) {
     return formatPostgresArrayText(options.value);
   }
   return undefined;
@@ -85,10 +73,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function isPostgresArrayColumn(
-  columnInfo: Pick<ColumnInfo, "data_type"> | undefined,
-  oldValue: GridCellValue | undefined,
-): boolean {
+function isPostgresArrayColumn(columnInfo: Pick<ColumnInfo, "data_type"> | undefined, oldValue: GridCellValue | undefined): boolean {
   if (Array.isArray(oldValue)) return true;
   const dataType = columnInfo?.data_type.trim().toLowerCase() ?? "";
   return dataType === "array" || dataType.endsWith("[]") || dataType.startsWith("_");

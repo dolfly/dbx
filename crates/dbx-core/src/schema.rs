@@ -303,6 +303,7 @@ async fn list_databases_once(state: &AppState, connection_id: &str) -> Result<Ve
         PoolKind::Postgres(p) => db::postgres::list_databases(p).await,
         PoolKind::Sqlite(p) => db::sqlite::list_databases(p).await,
         PoolKind::Rqlite(client) => db::rqlite_driver::list_databases(client).await,
+        PoolKind::Turso(client) => db::turso_driver::list_databases(client).await,
         PoolKind::DuckDb(con) => {
             let con = con.lock().map_err(|e| e.to_string())?;
             duckdb_list_databases_with_attached(&con, &duckdb_attached_names)
@@ -521,6 +522,9 @@ async fn list_tables_once(
             .await
             .map(|tables| filter_table_infos_for_config(tables, filter, limit, db_config.as_ref())),
         PoolKind::Rqlite(client) => db::rqlite_driver::list_tables(client, schema)
+            .await
+            .map(|tables| filter_table_infos_for_config(tables, filter, limit, db_config.as_ref())),
+        PoolKind::Turso(client) => db::turso_driver::list_tables(client, schema)
             .await
             .map(|tables| filter_table_infos_for_config(tables, filter, limit, db_config.as_ref())),
         PoolKind::MongoDb(client) => db::mongo_driver::list_collections(client, database)
@@ -1299,6 +1303,9 @@ pub async fn get_columns_core(
         PoolKind::Rqlite(client) => {
             db::rqlite_driver::get_columns(client, schema, table).await.map(deduplicate_column_infos)
         }
+        PoolKind::Turso(client) => {
+            db::turso_driver::get_columns(client, schema, table).await.map(deduplicate_column_infos)
+        }
         PoolKind::Elasticsearch(client) => {
             db::elasticsearch_driver::get_columns(client, table).await.map(deduplicate_column_infos)
         }
@@ -1374,6 +1381,7 @@ pub async fn list_indexes_core(
         PoolKind::Postgres(p) => db::postgres::list_indexes(p, schema, table).await,
         PoolKind::Sqlite(p) => db::sqlite::list_indexes(p, schema, table).await,
         PoolKind::Rqlite(client) => db::rqlite_driver::list_indexes(client, schema, table).await,
+        PoolKind::Turso(client) => db::turso_driver::list_indexes(client, schema, table).await,
         PoolKind::MongoDb(client) => db::mongo_driver::list_indexes(client, database, table).await,
         _ => Ok(vec![]),
     }
@@ -1404,6 +1412,7 @@ pub async fn list_foreign_keys_core(
         PoolKind::Postgres(p) => db::postgres::list_foreign_keys(p, schema, table).await,
         PoolKind::Sqlite(p) => db::sqlite::list_foreign_keys(p, schema, table).await,
         PoolKind::Rqlite(client) => db::rqlite_driver::list_foreign_keys(client, schema, table).await,
+        PoolKind::Turso(client) => db::turso_driver::list_foreign_keys(client, schema, table).await,
         _ => Ok(vec![]),
     }
 }
@@ -1433,6 +1442,7 @@ pub async fn list_triggers_core(
         PoolKind::Postgres(p) => db::postgres::list_triggers(p, schema, table).await,
         PoolKind::Sqlite(p) => db::sqlite::list_triggers(p, schema, table).await,
         PoolKind::Rqlite(client) => db::rqlite_driver::list_triggers(client, schema, table).await,
+        PoolKind::Turso(client) => db::turso_driver::list_triggers(client, schema, table).await,
         _ => Ok(vec![]),
     }
 }
@@ -1501,6 +1511,7 @@ pub async fn get_table_ddl_core(
         PoolKind::Postgres(p) => pg_ddl(p, schema, table).await,
         PoolKind::Sqlite(p) => sqlite_ddl(p, table).await,
         PoolKind::Rqlite(client) => db::rqlite_driver::table_ddl(client, table).await,
+        PoolKind::Turso(client) => db::turso_driver::table_ddl(client, table).await,
         _ => Err("DDL not supported for this database type".to_string()),
     }
 }
@@ -1756,6 +1767,9 @@ pub async fn get_object_source_core(
                 )?,
                 PoolKind::Rqlite(client) => {
                     return db::rqlite_driver::object_source(client, name, &object_type).await;
+                }
+                PoolKind::Turso(client) => {
+                    return db::turso_driver::object_source(client, name, &object_type).await;
                 }
                 PoolKind::ClickHouse(client) if matches!(object_type, db::ObjectSourceKind::View) => {
                     let result = db::clickhouse_driver::execute_query(

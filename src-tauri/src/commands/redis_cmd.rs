@@ -81,9 +81,10 @@ pub async fn redis_hash_set(
     key_raw: String,
     field: String,
     value: String,
+    ttl: Option<i64>,
 ) -> Result<(), String> {
     ensure_connection_writable(&state, &connection_id, "HSET").await?;
-    dbx_core::redis_ops::redis_hash_set_in_db_core(&state, &connection_id, db, &key_raw, &field, &value).await
+    dbx_core::redis_ops::redis_hash_set_in_db_core(&state, &connection_id, db, &key_raw, &field, &value, ttl).await
 }
 
 #[tauri::command]
@@ -105,9 +106,10 @@ pub async fn redis_list_push(
     db: u32,
     key_raw: String,
     value: String,
+    ttl: Option<i64>,
 ) -> Result<(), String> {
     ensure_connection_writable(&state, &connection_id, "LPUSH").await?;
-    dbx_core::redis_ops::redis_list_push_in_db_core(&state, &connection_id, db, &key_raw, &value).await
+    dbx_core::redis_ops::redis_list_push_in_db_core(&state, &connection_id, db, &key_raw, &value, ttl).await
 }
 
 #[tauri::command]
@@ -142,9 +144,10 @@ pub async fn redis_set_add(
     db: u32,
     key_raw: String,
     member: String,
+    ttl: Option<i64>,
 ) -> Result<(), String> {
     ensure_connection_writable(&state, &connection_id, "SADD").await?;
-    dbx_core::redis_ops::redis_set_add_in_db_core(&state, &connection_id, db, &key_raw, &member).await
+    dbx_core::redis_ops::redis_set_add_in_db_core(&state, &connection_id, db, &key_raw, &member, ttl).await
 }
 
 #[tauri::command]
@@ -167,9 +170,10 @@ pub async fn redis_zadd(
     key_raw: String,
     member: String,
     score: f64,
+    ttl: Option<i64>,
 ) -> Result<(), String> {
     ensure_connection_writable(&state, &connection_id, "ZADD").await?;
-    dbx_core::redis_ops::redis_zadd_in_db_core(&state, &connection_id, db, &key_raw, &member, score).await
+    dbx_core::redis_ops::redis_zadd_in_db_core(&state, &connection_id, db, &key_raw, &member, score, ttl).await
 }
 
 #[tauri::command]
@@ -182,6 +186,40 @@ pub async fn redis_zrem(
 ) -> Result<(), String> {
     ensure_connection_writable(&state, &connection_id, "ZREM").await?;
     dbx_core::redis_ops::redis_zrem_in_db_core(&state, &connection_id, db, &key_raw, &member).await
+}
+
+#[tauri::command]
+pub async fn redis_stream_add(
+    state: State<'_, Arc<AppState>>,
+    connection_id: String,
+    db: u32,
+    key_raw: String,
+    entry_id: String,
+    fields: Vec<(String, String)>,
+    ttl: Option<i64>,
+) -> Result<(), String> {
+    dbx_core::redis_ops::redis_stream_add_in_db_core(&state, &connection_id, db, &key_raw, &entry_id, fields, ttl).await
+}
+
+#[tauri::command]
+pub async fn redis_json_set(
+    state: State<'_, Arc<AppState>>,
+    connection_id: String,
+    db: u32,
+    key_raw: String,
+    value: String,
+    ttl: Option<i64>,
+) -> Result<(), String> {
+    dbx_core::redis_ops::redis_json_set_in_db_core(&state, &connection_id, db, &key_raw, &value, ttl).await
+}
+
+#[tauri::command]
+pub async fn redis_check_json_module(
+    state: State<'_, Arc<AppState>>,
+    connection_id: String,
+    db: u32,
+) -> Result<bool, String> {
+    dbx_core::redis_ops::redis_check_json_module_in_db_core(&state, &connection_id, db).await
 }
 
 #[tauri::command]

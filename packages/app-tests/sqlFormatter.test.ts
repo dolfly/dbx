@@ -12,15 +12,9 @@ test("rejects very large SQL before importing formatter", async () => {
     throw new Error("formatter should not load");
   });
 
-  const {
-    formatSqlText: isolatedFormatSqlText,
-    MAX_SQL_FORMAT_CHARS: isolatedMaxSqlFormatChars,
-  } = await import("../../apps/desktop/src/lib/sqlFormatter.ts");
+  const { formatSqlText: isolatedFormatSqlText, MAX_SQL_FORMAT_CHARS: isolatedMaxSqlFormatChars } = await import("../../apps/desktop/src/lib/sqlFormatter.ts");
 
-  await assert.rejects(
-    () => isolatedFormatSqlText("x".repeat(isolatedMaxSqlFormatChars + 1), "generic"),
-    /too large/i,
-  );
+  await assert.rejects(() => isolatedFormatSqlText("x".repeat(isolatedMaxSqlFormatChars + 1), "generic"), /too large/i);
 });
 
 test("formats SQL with uppercase keywords and readable line breaks by default", async () => {
@@ -56,8 +50,5 @@ test("leaves blank SQL unchanged", async () => {
 });
 
 test("rejects very large SQL before loading formatter work", async () => {
-  await assert.rejects(
-    () => formatSqlText("x".repeat(MAX_SQL_FORMAT_CHARS + 1), "generic"),
-    /too large/i,
-  );
+  await assert.rejects(() => formatSqlText("x".repeat(MAX_SQL_FORMAT_CHARS + 1), "generic"), /too large/i);
 });

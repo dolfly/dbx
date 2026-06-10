@@ -151,27 +151,14 @@ async function parseConnection(node: ParsedNode): Promise<ConnectionConfig | nul
   const profile = inferProfile(rawType, node.tag, port);
   if (!profile) {
     const name = getAny(node.values, ["name", "connectionName", "connName", "caption", "title"]) || "(unnamed)";
-    console.warn(
-      `[Navicat Import] 跳过无法识别类型的连接: "${name}" (type="${rawType}", tag="${node.tag}", port=${port ?? "N/A"})`,
-    );
+    console.warn(`[Navicat Import] 跳过无法识别类型的连接: "${name}" (type="${rawType}", tag="${node.tag}", port=${port ?? "N/A"})`);
     return null;
   }
 
-  const name =
-    getAny(node.values, ["name", "connectionName", "connName", "caption", "title"]) ||
-    getAny(node.values, ["host", "server", "hostname"]) ||
-    profile.label;
-  const host =
-    getAny(node.values, ["host", "server", "hostname", "serverHost", "address"]) ||
-    getAny(node.values, ["databaseFile", "filename", "path", "databasePath"]) ||
-    (profile.dbType === "sqlite" ? "" : "127.0.0.1");
+  const name = getAny(node.values, ["name", "connectionName", "connName", "caption", "title"]) || getAny(node.values, ["host", "server", "hostname"]) || profile.label;
+  const host = getAny(node.values, ["host", "server", "hostname", "serverHost", "address"]) || getAny(node.values, ["databaseFile", "filename", "path", "databasePath"]) || (profile.dbType === "sqlite" ? "" : "127.0.0.1");
   const database = getAny(node.values, ["database", "databaseName", "initialDatabase", "serviceName", "sid", "schema"]);
-  const oracleConnectionType =
-    profile.dbType === "oracle" && getAny(node.values, ["sid"])
-      ? "sid"
-      : profile.dbType === "oracle"
-        ? "service_name"
-        : undefined;
+  const oracleConnectionType = profile.dbType === "oracle" && getAny(node.values, ["sid"]) ? "sid" : profile.dbType === "oracle" ? "service_name" : undefined;
   const username = getAny(node.values, ["user", "username", "userName", "uid"]) || profile.user;
   const password = await decryptNavicatPassword(getAny(node.values, ["password"]));
 

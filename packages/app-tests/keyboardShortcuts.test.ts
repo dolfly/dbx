@@ -60,10 +60,7 @@ test("matches Cmd+T for opening a new query", () => {
 
 test("matches custom shortcut settings for opening a new query", () => {
   assert.equal(isNewQueryShortcut({ key: "t", metaKey: true }, { newQuery: "Shift+Mod+N" } as any), false);
-  assert.equal(
-    isNewQueryShortcut({ key: "n", ctrlKey: true, shiftKey: true } as any, { newQuery: "Shift+Mod+N" } as any),
-    true,
-  );
+  assert.equal(isNewQueryShortcut({ key: "n", ctrlKey: true, shiftKey: true } as any, { newQuery: "Shift+Mod+N" } as any), true);
 });
 
 test("matches Mod+Comma for opening settings", () => {
@@ -75,9 +72,12 @@ test("matches Mod+Comma for opening settings", () => {
 test("matches custom shortcut settings for opening settings", () => {
   assert.equal(isOpenSettingsShortcut({ key: ",", metaKey: true }, { openSettings: "Shift+Mod+P" } as any), false);
   assert.equal(
-    isOpenSettingsShortcut({ key: "p", ctrlKey: true, shiftKey: true } as any, {
-      openSettings: "Shift+Mod+P",
-    } as any),
+    isOpenSettingsShortcut(
+      { key: "p", ctrlKey: true, shiftKey: true } as any,
+      {
+        openSettings: "Shift+Mod+P",
+      } as any,
+    ),
     true,
   );
 });
@@ -118,10 +118,7 @@ test("matches configurable shortcut for toggling transpose view", () => {
 
 test("matches custom shortcut settings for refreshing data", () => {
   assert.equal(isRefreshDataShortcut({ key: "F5" }, { refreshData: "Shift+Mod+R" } as any), false);
-  assert.equal(
-    isRefreshDataShortcut({ key: "r", metaKey: true, shiftKey: true } as any, { refreshData: "Shift+Mod+R" } as any),
-    true,
-  );
+  assert.equal(isRefreshDataShortcut({ key: "r", metaKey: true, shiftKey: true } as any, { refreshData: "Shift+Mod+R" } as any), true);
 });
 
 test("detects browser reload shortcuts for desktop suppression", () => {
@@ -194,8 +191,7 @@ test("ignores Alt+S for saving", () => {
 
 test("detects object source editor targets for contextual save", () => {
   const target = {
-    closest: (selector: string) =>
-      selector === "[data-object-source-editor], [data-object-source-preview]" ? {} : null,
+    closest: (selector: string) => (selector === "[data-object-source-editor], [data-object-source-preview]" ? {} : null),
   };
 
   assert.equal(isObjectSourceSaveShortcutTarget(target), true);

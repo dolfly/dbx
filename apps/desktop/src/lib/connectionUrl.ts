@@ -115,9 +115,7 @@ function parseMongoUrl(source: string): ParsedConnectionUrl | null {
   if (firstHost.startsWith("[")) {
     const bracketEnd = firstHost.indexOf("]");
     host = firstHost.substring(1, bracketEnd);
-    port = firstHost.substring(bracketEnd + 1).startsWith(":")
-      ? Number(firstHost.substring(bracketEnd + 2)) || profile.defaultPort
-      : profile.defaultPort;
+    port = firstHost.substring(bracketEnd + 1).startsWith(":") ? Number(firstHost.substring(bracketEnd + 2)) || profile.defaultPort : profile.defaultPort;
   } else if (firstHost.includes(":")) {
     const colonIdx = firstHost.lastIndexOf(":");
     host = firstHost.substring(0, colonIdx);
@@ -191,9 +189,7 @@ function urlParamsRequireTls(dbType: DatabaseType, params: string): boolean {
   if (dbType === "mysql") {
     const requireSsl = queryParamValue(params, "require_ssl")?.toLowerCase();
     if (requireSsl === "true" || requireSsl === "1" || requireSsl === "yes") return true;
-    const sslMode = (queryParamValue(params, "ssl-mode") || queryParamValue(params, "sslmode") || "")
-      .toLowerCase()
-      .replace("-", "_");
+    const sslMode = (queryParamValue(params, "ssl-mode") || queryParamValue(params, "sslmode") || "").toLowerCase().replace("-", "_");
     return sslMode === "required" || sslMode === "require" || sslMode === "verify_ca" || sslMode === "verify_identity";
   }
 
@@ -345,10 +341,7 @@ function parseJdbcUCanAccessUrl(source: string): ParsedConnectionUrl | null {
 }
 
 function parseJdbcGbase8sUrl(source: string): ParsedConnectionUrl | null {
-  const match =
-    /^jdbc:gbasedbt-sqli:\/\/(?:(?<userinfo>[^@/?#]*)@)?(?<host>\[[^\]]+\]|[^:/?#]+)(?::(?<port>\d+))?\/(?<database>[^:?#]*)(?::(?<params>[^?#]*))?/i.exec(
-      source,
-    );
+  const match = /^jdbc:gbasedbt-sqli:\/\/(?:(?<userinfo>[^@/?#]*)@)?(?<host>\[[^\]]+\]|[^:/?#]+)(?::(?<port>\d+))?\/(?<database>[^:?#]*)(?::(?<params>[^?#]*))?/i.exec(source);
   if (!match?.groups) return null;
 
   const rawUserInfo = match.groups.userinfo || "";
@@ -403,12 +396,8 @@ export function parseConnectionUrl(value: string, preferredProfile?: string): Pa
 
   const urlParams = parsed.search.replace(/^\?/, "");
   const normalizedFragment = decodeUrlPart(parsed.hash.replace(/^#/, "")).trim().toLowerCase();
-  const parsedUrlParams =
-    profile.type === "redis" && normalizedFragment === "insecure"
-      ? [urlParams, "insecure=true"].filter(Boolean).join("&")
-      : urlParams;
-  const mysqlCredentials =
-    isJdbcUrl && profile.type === "mysql" ? extractMysqlCredentialParams(parsedUrlParams) : undefined;
+  const parsedUrlParams = profile.type === "redis" && normalizedFragment === "insecure" ? [urlParams, "insecure=true"].filter(Boolean).join("&") : urlParams;
+  const mysqlCredentials = isJdbcUrl && profile.type === "mysql" ? extractMysqlCredentialParams(parsedUrlParams) : undefined;
   const effectiveUrlParams = mysqlCredentials?.urlParams ?? parsedUrlParams;
   if (profile.type === "mongodb") {
     return {
@@ -437,18 +426,11 @@ export function parseConnectionUrl(value: string, preferredProfile?: string): Pa
     password: mysqlCredentials?.password ?? decodeUrlPart(parsed.password),
     database: databaseFromPath(parsed.pathname),
     urlParams: effectiveUrlParams,
-    ssl:
-      scheme === "rediss" ||
-      scheme === "https" ||
-      urlParamsRequireTls(profile.type, effectiveUrlParams) ||
-      (profile.type === "mysql" && isTidbCloudHost(parsed.hostname)),
+    ssl: scheme === "rediss" || scheme === "https" || urlParamsRequireTls(profile.type, effectiveUrlParams) || (profile.type === "mysql" && isTidbCloudHost(parsed.hostname)),
   };
 }
 
-export function applyParsedConnectionUrl(
-  config: Omit<ConnectionConfig, "id">,
-  parsed: ParsedConnectionUrl,
-): Omit<ConnectionConfig, "id"> {
+export function applyParsedConnectionUrl(config: Omit<ConnectionConfig, "id">, parsed: ParsedConnectionUrl): Omit<ConnectionConfig, "id"> {
   return {
     ...config,
     db_type: parsed.dbType,

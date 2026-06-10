@@ -19,19 +19,12 @@ export function decodeSelectableDatabaseValue(dbType: DatabaseType | undefined, 
   return value === TREE_SCHEMA_DEFAULT_DATABASE_SELECT_VALUE && usesTreeSchemaMode(dbType) ? "" : value;
 }
 
-export function formatDatabaseLabel(
-  connection: Pick<ConnectionConfig, "db_type"> | undefined,
-  database: string,
-  labels: { defaultDatabase: string; noDatabase: string },
-): string {
+export function formatDatabaseLabel(connection: Pick<ConnectionConfig, "db_type"> | undefined, database: string, labels: { defaultDatabase: string; noDatabase: string }): string {
   if (connection?.db_type === "redis" && database !== "") return `db${database}`;
   if (isTreeSchemaDefaultDatabase(connection?.db_type, database)) return labels.defaultDatabase;
   return database || labels.noDatabase;
 }
 
-export function isDefaultDatabase(
-  connection: Pick<ConnectionConfig, "database"> | undefined,
-  database: string,
-): boolean {
+export function isDefaultDatabase(connection: Pick<ConnectionConfig, "database"> | undefined, database: string): boolean {
   return !!connection?.database && !!database && connection.database === database;
 }

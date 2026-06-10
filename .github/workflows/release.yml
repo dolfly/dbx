@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -107,7 +107,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './ -> target'
+          workspaces: "./ -> target"
           shared-key: release-${{ matrix.target }}-${{ steps.deps-hash.outputs.hash }}
           add-rust-environment-hash-key: false
           cache-on-failure: true
@@ -173,7 +173,7 @@ jobs:
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'DBX ${{ github.ref_name }}'
+          releaseName: "DBX ${{ github.ref_name }}"
           releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: true
           prerelease: false
@@ -246,7 +246,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: maven
 
       - name: Apply automatic JDBC plugin version bump
@@ -301,7 +301,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ github.ref_name }} --repo ${{ github.repository }} --draft=false --prerelease
-
 
   docker:
     runs-on: ubuntu-latest

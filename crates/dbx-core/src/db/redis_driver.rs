@@ -1204,11 +1204,24 @@ where
     redis::cmd("DEL").arg(key).query_async::<()>(con).await.map_err(|e| e.to_string())
 }
 
-pub async fn hash_set<C>(con: &mut C, key: &[u8], field: &str, value: &str) -> Result<(), String>
+async fn apply_expire_if_needed<C>(con: &mut C, key: &[u8], ttl: Option<i64>) -> Result<(), String>
 where
     C: ConnectionLike + Send + Sync + Unpin,
 {
-    redis::cmd("HSET").arg(key).arg(field).arg(value).query_async::<()>(con).await.map_err(|e| e.to_string())
+    if let Some(t) = ttl {
+        if t > 0 {
+            redis::cmd("EXPIRE").arg(key).arg(t).query_async::<()>(con).await.map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn hash_set<C>(con: &mut C, key: &[u8], field: &str, value: &str, ttl: Option<i64>) -> Result<(), String>
+where
+    C: ConnectionLike + Send + Sync + Unpin,
+{
+    redis::cmd("HSET").arg(key).arg(field).arg(value).query_async::<()>(con).await.map_err(|e| e.to_string())?;
+    apply_expire_if_needed(con, key, ttl).await
 }
 
 pub async fn hash_del<C>(con: &mut C, key: &[u8], field: &str) -> Result<(), String>
@@ -1218,11 +1231,12 @@ where
     redis::cmd("HDEL").arg(key).arg(field).query_async::<()>(con).await.map_err(|e| e.to_string())
 }
 
-pub async fn list_push<C>(con: &mut C, key: &[u8], value: &str) -> Result<(), String>
+pub async fn list_push<C>(con: &mut C, key: &[u8], value: &str, ttl: Option<i64>) -> Result<(), String>
 where
     C: ConnectionLike + Send + Sync + Unpin,
 {
-    redis::cmd("RPUSH").arg(key).arg(value).query_async::<()>(con).await.map_err(|e| e.to_string())
+    redis::cmd("RPUSH").arg(key).arg(value).query_async::<()>(con).await.map_err(|e| e.to_string())?;
+    apply_expire_if_needed(con, key, ttl).await
 }
 
 pub async fn list_set<C>(con: &mut C, key: &[u8], index: i64, value: &str) -> Result<(), String>
@@ -1241,11 +1255,12 @@ where
     redis::cmd("LREM").arg(key).arg(1).arg(placeholder).query_async::<()>(con).await.map_err(|e| e.to_string())
 }
 
-pub async fn set_add<C>(con: &mut C, key: &[u8], member: &str) -> Result<(), String>
+pub async fn set_add<C>(con: &mut C, key: &[u8], member: &str, ttl: Option<i64>) -> Result<(), String>
 where
     C: ConnectionLike + Send + Sync + Unpin,
 {
-    redis::cmd("SADD").arg(key).arg(member).query_async::<()>(con).await.map_err(|e| e.to_string())
+    redis::cmd("SADD").arg(key).arg(member).query_async::<()>(con).await.map_err(|e| e.to_string())?;
+    apply_expire_if_needed(con, key, ttl).await
 }
 
 pub async fn set_remove<C>(con: &mut C, key: &[u8], member: &str) -> Result<(), String>
@@ -1255,11 +1270,12 @@ where
     redis::cmd("SREM").arg(key).arg(member).query_async::<()>(con).await.map_err(|e| e.to_string())
 }
 
-pub async fn zadd<C>(con: &mut C, key: &[u8], member: &str, score: f64) -> Result<(), String>
+pub async fn zadd<C>(con: &mut C, key: &[u8], member: &str, score: f64, ttl: Option<i64>) -> Result<(), String>
 where
     C: ConnectionLike + Send + Sync + Unpin,
 {
-    redis::cmd("ZADD").arg(key).arg(score).arg(member).query_async::<()>(con).await.map_err(|e| e.to_string())
+    redis::cmd("ZADD").arg(key).arg(score).arg(member).query_async::<()>(con).await.map_err(|e| e.to_string())?;
+    apply_expire_if_needed(con, key, ttl).await
 }
 
 pub async fn zrem<C>(con: &mut C, key: &[u8], member: &str) -> Result<(), String>
@@ -1267,6 +1283,51 @@ where
     C: ConnectionLike + Send + Sync + Unpin,
 {
     redis::cmd("ZREM").arg(key).arg(member).query_async::<()>(con).await.map_err(|e| e.to_string())
+}
+
+pub async fn stream_add<C>(
+    con: &mut C,
+    key: &[u8],
+    entry_id: &str,
+    fields: &[(String, String)],
+    ttl: Option<i64>,
+) -> Result<(), String>
+where
+    C: ConnectionLike + Send + Sync + Unpin,
+{
+    let mut cmd = redis::cmd("XADD");
+    cmd.arg(key).arg(entry_id);
+    for (field, value) in fields {
+        cmd.arg(field.as_str()).arg(value.as_str());
+    }
+    cmd.query_async::<()>(con).await.map_err(|e| e.to_string())?;
+    apply_expire_if_needed(con, key, ttl).await
+}
+
+pub async fn json_set<C>(con: &mut C, key: &[u8], value: &str, ttl: Option<i64>) -> Result<(), String>
+where
+    C: ConnectionLike + Send + Sync + Unpin,
+{
+    redis::cmd("JSON.SET").arg(key).arg("$").arg(value).query_async::<()>(con).await.map_err(|e| e.to_string())?;
+    apply_expire_if_needed(con, key, ttl).await
+}
+
+pub async fn check_json_module<C>(con: &mut C) -> Result<bool, String>
+where
+    C: ConnectionLike + Send + Sync + Unpin,
+{
+    let raw: RedisRawValue = redis::cmd("MODULE").arg("LIST").query_async(con).await.map_err(|e| e.to_string())?;
+    Ok(match raw {
+        RedisRawValue::Array(modules) => modules.iter().any(|module| {
+            if let RedisRawValue::Array(kvs) = module {
+                kvs.get(1)
+                    .is_some_and(|v| matches!(v, RedisRawValue::BulkString(n) if n.eq_ignore_ascii_case(b"ReJSON")))
+            } else {
+                false
+            }
+        }),
+        _ => false,
+    })
 }
 
 pub async fn set_ttl<C>(con: &mut C, key: &[u8], ttl: i64) -> Result<(), String>

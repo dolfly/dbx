@@ -99,11 +99,7 @@ export interface TransposeRecordIndexesForModeOptions {
   visibleRecordIndexes: number[];
 }
 
-export function nextTransposeState(
-  showTranspose: boolean,
-  transposeRowIndex: number | null,
-  requestedRowIndex: number,
-): DataGridTransposeState {
+export function nextTransposeState(showTranspose: boolean, transposeRowIndex: number | null, requestedRowIndex: number): DataGridTransposeState {
   if (showTranspose && transposeRowIndex === requestedRowIndex) {
     return { showTranspose: false, transposeRowIndex: null };
   }
@@ -128,11 +124,7 @@ export function nextAppendedTransposeState(showTranspose: boolean, totalRecords:
   return { showTranspose: true, transposeRowIndex: totalRecords - 1 };
 }
 
-export function nextTransposeStateForRecordCount(
-  showTranspose: boolean,
-  transposeRowIndex: number | null,
-  totalRecords: number,
-): DataGridTransposeState {
+export function nextTransposeStateForRecordCount(showTranspose: boolean, transposeRowIndex: number | null, totalRecords: number): DataGridTransposeState {
   if (!showTranspose || totalRecords <= 0) return { showTranspose: false, transposeRowIndex: null };
   const requestedRowIndex = transposeRowIndex ?? 0;
   return {
@@ -159,9 +151,7 @@ export function buildTransposeRows<T>(options: BuildTransposeRowsOptions<T>): Ar
   });
 }
 
-export function buildVisibleTransposeRows<T>(
-  options: BuildVisibleTransposeRowsOptions<T>,
-): Array<DataGridVisibleTransposeRow<T>> {
+export function buildVisibleTransposeRows<T>(options: BuildVisibleTransposeRowsOptions<T>): Array<DataGridVisibleTransposeRow<T>> {
   return options.columns.map((column, columnIndex) => {
     return {
       id: `${columnIndex}:${column}`,
@@ -195,10 +185,7 @@ export function visibleTransposeRecordWindow(options: TransposeRecordWindowOptio
   const recordScrollLeft = Math.max(0, options.scrollLeft - options.pinnedWidth);
   const recordViewportWidth = Math.max(0, options.viewportWidth - options.pinnedWidth);
   const start = Math.max(0, Math.floor(recordScrollLeft / options.recordWidth) - overscan);
-  const end = Math.min(
-    options.totalRecords,
-    Math.ceil((recordScrollLeft + recordViewportWidth) / options.recordWidth) + overscan + 1,
-  );
+  const end = Math.min(options.totalRecords, Math.ceil((recordScrollLeft + recordViewportWidth) / options.recordWidth) + overscan + 1);
 
   return {
     start,
@@ -223,12 +210,7 @@ export function transposeAnchorRowIndex(options: TransposeAnchorOptions): number
   }
 
   const range = options.selectedRange;
-  if (
-    range &&
-    range.startRow !== range.endRow &&
-    options.requestedRowIndex >= range.startRow &&
-    options.requestedRowIndex <= range.endRow
-  ) {
+  if (range && range.startRow !== range.endRow && options.requestedRowIndex >= range.startRow && options.requestedRowIndex <= range.endRow) {
     return range.startRow;
   }
 

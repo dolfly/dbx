@@ -75,6 +75,18 @@ pub struct RedisHashRequest {
     pub key_raw: String,
     pub field: String,
     pub value: Option<String>,
+    pub ttl: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedisZaddRequest {
+    pub connection_id: String,
+    pub db: u32,
+    pub key_raw: String,
+    pub member: String,
+    pub score: f64,
+    pub ttl: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -85,6 +97,7 @@ pub struct RedisListRequest {
     pub key_raw: String,
     pub value: Option<String>,
     pub index: Option<i64>,
+    pub ttl: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -94,6 +107,28 @@ pub struct RedisSetRequest {
     pub db: u32,
     pub key_raw: String,
     pub member: String,
+    pub ttl: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedisStreamAddRequest {
+    pub connection_id: String,
+    pub db: u32,
+    pub key_raw: String,
+    pub entry_id: String,
+    pub fields: Vec<(String, String)>,
+    pub ttl: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedisJsonSetRequest {
+    pub connection_id: String,
+    pub db: u32,
+    pub key_raw: String,
+    pub value: String,
+    pub ttl: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -215,6 +250,7 @@ pub async fn hash_set(
         &req.key_raw,
         &req.field,
         value,
+        req.ttl,
     )
     .await
     .map_err(AppError)?;
@@ -238,9 +274,16 @@ pub async fn list_push(
 ) -> Result<Json<()>, AppError> {
     ensure_writable(&state.app, &req.connection_id, "LPUSH").await?;
     let value = req.value.as_deref().unwrap_or("");
-    dbx_core::redis_ops::redis_list_push_in_db_core(&state.app, &req.connection_id, req.db, &req.key_raw, value)
-        .await
-        .map_err(AppError)?;
+    dbx_core::redis_ops::redis_list_push_in_db_core(
+        &state.app,
+        &req.connection_id,
+        req.db,
+        &req.key_raw,
+        value,
+        req.ttl,
+    )
+    .await
+    .map_err(AppError)?;
     Ok(Json(()))
 }
 
@@ -274,9 +317,16 @@ pub async fn set_add(
     Json(req): Json<RedisSetRequest>,
 ) -> Result<Json<()>, AppError> {
     ensure_writable(&state.app, &req.connection_id, "SADD").await?;
-    dbx_core::redis_ops::redis_set_add_in_db_core(&state.app, &req.connection_id, req.db, &req.key_raw, &req.member)
-        .await
-        .map_err(AppError)?;
+    dbx_core::redis_ops::redis_set_add_in_db_core(
+        &state.app,
+        &req.connection_id,
+        req.db,
+        &req.key_raw,
+        &req.member,
+        req.ttl,
+    )
+    .await
+    .map_err(AppError)?;
     Ok(Json(()))
 }
 
@@ -289,6 +339,66 @@ pub async fn set_remove(
         .await
         .map_err(AppError)?;
     Ok(Json(()))
+}
+
+pub async fn zadd(State(state): State<Arc<WebState>>, Json(req): Json<RedisZaddRequest>) -> Result<Json<()>, AppError> {
+    dbx_core::redis_ops::redis_zadd_in_db_core(
+        &state.app,
+        &req.connection_id,
+        req.db,
+        &req.key_raw,
+        &req.member,
+        req.score,
+        req.ttl,
+    )
+    .await
+    .map_err(AppError)?;
+    Ok(Json(()))
+}
+
+pub async fn stream_add(
+    State(state): State<Arc<WebState>>,
+    Json(req): Json<RedisStreamAddRequest>,
+) -> Result<Json<()>, AppError> {
+    dbx_core::redis_ops::redis_stream_add_in_db_core(
+        &state.app,
+        &req.connection_id,
+        req.db,
+        &req.key_raw,
+        &req.entry_id,
+        req.fields,
+        req.ttl,
+    )
+    .await
+    .map_err(AppError)?;
+    Ok(Json(()))
+}
+
+pub async fn json_set(
+    State(state): State<Arc<WebState>>,
+    Json(req): Json<RedisJsonSetRequest>,
+) -> Result<Json<()>, AppError> {
+    dbx_core::redis_ops::redis_json_set_in_db_core(
+        &state.app,
+        &req.connection_id,
+        req.db,
+        &req.key_raw,
+        &req.value,
+        req.ttl,
+    )
+    .await
+    .map_err(AppError)?;
+    Ok(Json(()))
+}
+
+pub async fn check_json_module(
+    State(state): State<Arc<WebState>>,
+    Json(req): Json<RedisDbRequest>,
+) -> Result<Json<bool>, AppError> {
+    let result = dbx_core::redis_ops::redis_check_json_module_in_db_core(&state.app, &req.connection_id, req.db)
+        .await
+        .map_err(AppError)?;
+    Ok(Json(result))
 }
 
 pub async fn delete_keys(

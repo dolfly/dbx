@@ -16,10 +16,7 @@ export interface SqlFormatterConfigEditorActions {
   formatJson: Command;
 }
 
-export function createSqlFormatterConfigKeymap(
-  commands: SqlFormatterConfigEditorCommands,
-  actions: SqlFormatterConfigEditorActions,
-): KeyBinding[] {
+export function createSqlFormatterConfigKeymap(commands: SqlFormatterConfigEditorCommands, actions: SqlFormatterConfigEditorActions): KeyBinding[] {
   return [
     { key: "Tab", run: commands.indentMore },
     { key: "Shift-Tab", run: commands.indentLess },
@@ -49,9 +46,7 @@ function altLabel(platform = globalThis.navigator?.platform || ""): "Option" | "
   return platform.toLowerCase().includes("mac") ? "Option" : "Alt";
 }
 
-export function sqlFormatterConfigShortcutRows(
-  platform = globalThis.navigator?.platform || "",
-): SqlFormatterConfigShortcutRow[] {
+export function sqlFormatterConfigShortcutRows(platform = globalThis.navigator?.platform || ""): SqlFormatterConfigShortcutRow[] {
   const isMac = platform.toLowerCase().includes("mac");
   const mod = modLabel(platform);
   const alt = altLabel(platform);

@@ -247,13 +247,7 @@ function formatJsonDraft(): boolean {
 
 async function loadCodeMirrorModules(): Promise<CodeMirrorModules> {
   if (cmModules) return cmModules;
-  const [view, state, langJson, commands, search] = await Promise.all([
-    import("@codemirror/view"),
-    import("@codemirror/state"),
-    import("@codemirror/lang-json"),
-    import("@codemirror/commands"),
-    import("@codemirror/search"),
-  ]);
+  const [view, state, langJson, commands, search] = await Promise.all([import("@codemirror/view"), import("@codemirror/state"), import("@codemirror/lang-json"), import("@codemirror/commands"), import("@codemirror/search")]);
   cmModules = { view, state, langJson, commands, search };
   return cmModules;
 }
@@ -349,10 +343,7 @@ watch(
   (value) => {
     if (activeMode.value === "json") {
       const currentDraft = parseSqlFormatterConfig(jsonDraft.value);
-      if (
-        currentDraft.ok &&
-        serializeSqlFormatterConfig(currentDraft.settings) === serializeSqlFormatterConfig(value)
-      ) {
+      if (currentDraft.ok && serializeSqlFormatterConfig(currentDraft.settings) === serializeSqlFormatterConfig(value)) {
         validateJsonDraft(jsonDraft.value);
         return;
       }
@@ -403,10 +394,7 @@ onBeforeUnmount(() => {
       </Button>
     </div>
 
-    <p
-      v-if="importError"
-      class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-    >
+    <p v-if="importError" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
       {{ importError }}
     </p>
 
@@ -420,10 +408,7 @@ onBeforeUnmount(() => {
         <div class="grid gap-4 md:grid-cols-3">
           <div class="space-y-2">
             <Label>{{ t("settings.sqlFormatterKeywordCase") }}</Label>
-            <Select
-              :model-value="settings.keywordCase"
-              @update:model-value="(value: any) => onCaseOption('keywordCase', value)"
-            >
+            <Select :model-value="settings.keywordCase" @update:model-value="(value: any) => onCaseOption('keywordCase', value)">
               <SelectTrigger class="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -437,10 +422,7 @@ onBeforeUnmount(() => {
 
           <div class="space-y-2">
             <Label>{{ t("settings.sqlFormatterFunctionCase") }}</Label>
-            <Select
-              :model-value="settings.functionCase"
-              @update:model-value="(value: any) => onCaseOption('functionCase', value)"
-            >
+            <Select :model-value="settings.functionCase" @update:model-value="(value: any) => onCaseOption('functionCase', value)">
               <SelectTrigger class="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -454,10 +436,7 @@ onBeforeUnmount(() => {
 
           <div class="space-y-2">
             <Label>{{ t("settings.sqlFormatterDataTypeCase") }}</Label>
-            <Select
-              :model-value="settings.dataTypeCase"
-              @update:model-value="(value: any) => onCaseOption('dataTypeCase', value)"
-            >
+            <Select :model-value="settings.dataTypeCase" @update:model-value="(value: any) => onCaseOption('dataTypeCase', value)">
               <SelectTrigger class="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -474,22 +453,10 @@ onBeforeUnmount(() => {
           <div class="space-y-2">
             <Label>{{ t("settings.sqlFormatterIndent") }}</Label>
             <div class="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                class="justify-center"
-                :class="!settings.useTabs ? 'border-blue-300 ring-2 ring-blue-300/50' : ''"
-                @click="updateOption('useTabs', false)"
-              >
+              <Button type="button" variant="outline" class="justify-center" :class="!settings.useTabs ? 'border-blue-300 ring-2 ring-blue-300/50' : ''" @click="updateOption('useTabs', false)">
                 {{ t("settings.sqlFormatterIndentSpaces") }}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                class="justify-center"
-                :class="settings.useTabs ? 'border-blue-300 ring-2 ring-blue-300/50' : ''"
-                @click="updateOption('useTabs', true)"
-              >
+              <Button type="button" variant="outline" class="justify-center" :class="settings.useTabs ? 'border-blue-300 ring-2 ring-blue-300/50' : ''" @click="updateOption('useTabs', true)">
                 {{ t("settings.sqlFormatterIndentTabs") }}
               </Button>
             </div>
@@ -557,22 +524,14 @@ onBeforeUnmount(() => {
         <div class="grid gap-3 md:grid-cols-2">
           <div class="flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
             <Label for="sql-formatter-dense-operators">{{ t("settings.sqlFormatterDenseOperators") }}</Label>
-            <Switch
-              id="sql-formatter-dense-operators"
-              :model-value="settings.denseOperators"
-              @update:model-value="(value: boolean) => updateOption('denseOperators', value)"
-            />
+            <Switch id="sql-formatter-dense-operators" :model-value="settings.denseOperators" @update:model-value="(value: boolean) => updateOption('denseOperators', value)" />
           </div>
 
           <div class="flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
             <Label for="sql-formatter-newline-before-semicolon">
               {{ t("settings.sqlFormatterNewlineBeforeSemicolon") }}
             </Label>
-            <Switch
-              id="sql-formatter-newline-before-semicolon"
-              :model-value="settings.newlineBeforeSemicolon"
-              @update:model-value="(value: boolean) => updateOption('newlineBeforeSemicolon', value)"
-            />
+            <Switch id="sql-formatter-newline-before-semicolon" :model-value="settings.newlineBeforeSemicolon" @update:model-value="(value: boolean) => updateOption('newlineBeforeSemicolon', value)" />
           </div>
         </div>
       </TabsContent>
@@ -592,19 +551,12 @@ onBeforeUnmount(() => {
 
         <div ref="jsonEditorRef" class="min-h-[260px]" />
 
-        <p
-          v-if="jsonValidationMessage"
-          class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-        >
+        <p v-if="jsonValidationMessage" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {{ jsonValidationMessage }}
         </p>
 
         <div class="grid gap-1 rounded-md border border-border/70 bg-muted/20 p-2 sm:grid-cols-2">
-          <div
-            v-for="row in shortcutRows"
-            :key="row.id"
-            class="flex min-w-0 items-center justify-between gap-2 rounded px-1.5 py-1 text-xs"
-          >
+          <div v-for="row in shortcutRows" :key="row.id" class="flex min-w-0 items-center justify-between gap-2 rounded px-1.5 py-1 text-xs">
             <span class="truncate text-muted-foreground">{{ t(row.labelKey) }}</span>
             <span class="shrink-0 rounded border bg-background px-1.5 py-0.5 font-mono text-[11px]">
               {{ row.shortcut }}

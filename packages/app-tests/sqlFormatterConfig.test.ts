@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import {
-  DEFAULT_SQL_FORMATTER_SETTINGS,
-  parseSqlFormatterConfig,
-  serializeSqlFormatterConfig,
-  normalizeSqlFormatterSettings,
-  syncSqlFormatterConfigDraft,
-  sqlFormatterOptions,
-} from "../../apps/desktop/src/lib/sqlFormatterConfig.ts";
+import { DEFAULT_SQL_FORMATTER_SETTINGS, parseSqlFormatterConfig, serializeSqlFormatterConfig, normalizeSqlFormatterSettings, syncSqlFormatterConfigDraft, sqlFormatterOptions } from "../../apps/desktop/src/lib/sqlFormatterConfig.ts";
 
 test("normalizes empty formatter settings to defaults", () => {
   assert.deepEqual(normalizeSqlFormatterSettings({}), DEFAULT_SQL_FORMATTER_SETTINGS);
@@ -119,28 +112,19 @@ test("rejects malformed formatter config files", () => {
   assert.deepEqual(parseSqlFormatterConfig("{bad json").ok, false);
   assert.deepEqual(parseSqlFormatterConfig(JSON.stringify({ version: 2, formatter: "sql-formatter", options: {} })).ok, false);
   assert.deepEqual(parseSqlFormatterConfig(JSON.stringify({ version: 1, formatter: "prettier", options: {} })).ok, false);
-  assert.deepEqual(
-    parseSqlFormatterConfig(JSON.stringify({ version: 1, formatter: "sql-formatter", options: { unknown: true } })).ok,
-    false,
-  );
+  assert.deepEqual(parseSqlFormatterConfig(JSON.stringify({ version: 1, formatter: "sql-formatter", options: { unknown: true } })).ok, false);
 });
 
 test("rejects invalid known formatter option values when parsing config files", () => {
-  const invalidKeywordCase = parseSqlFormatterConfig(
-    JSON.stringify({ version: 1, formatter: "sql-formatter", options: { keywordCase: "camel" } }),
-  );
+  const invalidKeywordCase = parseSqlFormatterConfig(JSON.stringify({ version: 1, formatter: "sql-formatter", options: { keywordCase: "camel" } }));
   assert.equal(invalidKeywordCase.ok, false);
   if (!invalidKeywordCase.ok) assert.match(invalidKeywordCase.message, /keywordCase/);
 
-  const invalidBoolean = parseSqlFormatterConfig(
-    JSON.stringify({ version: 1, formatter: "sql-formatter", options: { useTabs: "yes" } }),
-  );
+  const invalidBoolean = parseSqlFormatterConfig(JSON.stringify({ version: 1, formatter: "sql-formatter", options: { useTabs: "yes" } }));
   assert.equal(invalidBoolean.ok, false);
   if (!invalidBoolean.ok) assert.match(invalidBoolean.message, /useTabs/);
 
-  const invalidNumericChoice = parseSqlFormatterConfig(
-    JSON.stringify({ version: 1, formatter: "sql-formatter", options: { tabWidth: 3 } }),
-  );
+  const invalidNumericChoice = parseSqlFormatterConfig(JSON.stringify({ version: 1, formatter: "sql-formatter", options: { tabWidth: 3 } }));
   assert.equal(invalidNumericChoice.ok, false);
   if (!invalidNumericChoice.ok) assert.match(invalidNumericChoice.message, /tabWidth/);
 });

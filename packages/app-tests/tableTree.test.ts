@@ -1,12 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import {
-  buildGroupedObjectTreeNodes,
-  buildObjectGroupPlaceholderNodes,
-  buildSimpleObjectTreeNodes,
-  buildTableTreeNodes,
-  mergeTableInfosIntoObjects,
-} from "../../apps/desktop/src/lib/tableTree.ts";
+import { buildGroupedObjectTreeNodes, buildObjectGroupPlaceholderNodes, buildSimpleObjectTreeNodes, buildTableTreeNodes, mergeTableInfosIntoObjects } from "../../apps/desktop/src/lib/tableTree.ts";
 import type { ObjectInfo, TableInfo, TreeNode } from "../../apps/desktop/src/types/database.ts";
 
 function table(name: string, parent?: string): TableInfo {

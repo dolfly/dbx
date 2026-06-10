@@ -32,9 +32,7 @@ export interface SqlFormatterConfigFile {
   options: SqlFormatterSettings;
 }
 
-export type SqlFormatterConfigParseResult =
-  | { ok: true; settings: SqlFormatterSettings }
-  | { ok: false; message: string };
+export type SqlFormatterConfigParseResult = { ok: true; settings: SqlFormatterSettings } | { ok: false; message: string };
 
 export const DEFAULT_SQL_FORMATTER_SETTINGS: SqlFormatterSettings = {
   keywordCase: "upper",
@@ -49,18 +47,7 @@ export const DEFAULT_SQL_FORMATTER_SETTINGS: SqlFormatterSettings = {
   newlineBeforeSemicolon: false,
 };
 
-const SQL_FORMATTER_OPTION_KEYS = new Set<keyof SqlFormatterSettings>([
-  "keywordCase",
-  "dataTypeCase",
-  "functionCase",
-  "useTabs",
-  "tabWidth",
-  "logicalOperatorNewline",
-  "expressionWidth",
-  "linesBetweenQueries",
-  "denseOperators",
-  "newlineBeforeSemicolon",
-]);
+const SQL_FORMATTER_OPTION_KEYS = new Set<keyof SqlFormatterSettings>(["keywordCase", "dataTypeCase", "functionCase", "useTabs", "tabWidth", "logicalOperatorNewline", "expressionWidth", "linesBetweenQueries", "denseOperators", "newlineBeforeSemicolon"]);
 
 const SQL_FORMATTER_OPTION_VALIDATORS: Record<keyof SqlFormatterSettings, (value: unknown) => boolean> = {
   keywordCase: (value) => isStringChoice(value, CASE_VALUES),
@@ -107,26 +94,11 @@ export function normalizeSqlFormatterSettings(value: unknown): SqlFormatterSetti
     functionCase: normalizeChoice(input.functionCase, CASE_VALUES, DEFAULT_SQL_FORMATTER_SETTINGS.functionCase),
     useTabs: normalizeBoolean(input.useTabs, DEFAULT_SQL_FORMATTER_SETTINGS.useTabs),
     tabWidth: normalizeNumberChoice(input.tabWidth, TAB_WIDTH_VALUES, DEFAULT_SQL_FORMATTER_SETTINGS.tabWidth),
-    logicalOperatorNewline: normalizeChoice(
-      input.logicalOperatorNewline,
-      LOGICAL_OPERATOR_NEWLINE_VALUES,
-      DEFAULT_SQL_FORMATTER_SETTINGS.logicalOperatorNewline,
-    ),
-    expressionWidth: normalizeNumberChoice(
-      input.expressionWidth,
-      EXPRESSION_WIDTH_VALUES,
-      DEFAULT_SQL_FORMATTER_SETTINGS.expressionWidth,
-    ),
-    linesBetweenQueries: normalizeNumberChoice(
-      input.linesBetweenQueries,
-      LINES_BETWEEN_QUERIES_VALUES,
-      DEFAULT_SQL_FORMATTER_SETTINGS.linesBetweenQueries,
-    ),
+    logicalOperatorNewline: normalizeChoice(input.logicalOperatorNewline, LOGICAL_OPERATOR_NEWLINE_VALUES, DEFAULT_SQL_FORMATTER_SETTINGS.logicalOperatorNewline),
+    expressionWidth: normalizeNumberChoice(input.expressionWidth, EXPRESSION_WIDTH_VALUES, DEFAULT_SQL_FORMATTER_SETTINGS.expressionWidth),
+    linesBetweenQueries: normalizeNumberChoice(input.linesBetweenQueries, LINES_BETWEEN_QUERIES_VALUES, DEFAULT_SQL_FORMATTER_SETTINGS.linesBetweenQueries),
     denseOperators: normalizeBoolean(input.denseOperators, DEFAULT_SQL_FORMATTER_SETTINGS.denseOperators),
-    newlineBeforeSemicolon: normalizeBoolean(
-      input.newlineBeforeSemicolon,
-      DEFAULT_SQL_FORMATTER_SETTINGS.newlineBeforeSemicolon,
-    ),
+    newlineBeforeSemicolon: normalizeBoolean(input.newlineBeforeSemicolon, DEFAULT_SQL_FORMATTER_SETTINGS.newlineBeforeSemicolon),
   };
 }
 
@@ -155,9 +127,7 @@ export function parseSqlFormatterConfig(text: string): SqlFormatterConfigParseRe
   if (parsed.formatter !== SQL_FORMATTER_CONFIG_FORMATTER) return { ok: false, message: "Unsupported formatter." };
   if (!isObject(parsed.options)) return { ok: false, message: "Config options must be a JSON object." };
 
-  const unknownOption = Object.keys(parsed.options).find(
-    (key) => !SQL_FORMATTER_OPTION_KEYS.has(key as keyof SqlFormatterSettings),
-  );
+  const unknownOption = Object.keys(parsed.options).find((key) => !SQL_FORMATTER_OPTION_KEYS.has(key as keyof SqlFormatterSettings));
   if (unknownOption) return { ok: false, message: `Unknown formatter option: ${unknownOption}.` };
 
   const invalidOption = Object.entries(parsed.options).find(([key, value]) => {
@@ -169,10 +139,7 @@ export function parseSqlFormatterConfig(text: string): SqlFormatterConfigParseRe
   return { ok: true, settings: normalizeSqlFormatterSettings(parsed.options) };
 }
 
-export function syncSqlFormatterConfigDraft(
-  text: string,
-  syncSettings: (settings: SqlFormatterSettings) => void,
-): SqlFormatterConfigParseResult {
+export function syncSqlFormatterConfigDraft(text: string, syncSettings: (settings: SqlFormatterSettings) => void): SqlFormatterConfigParseResult {
   const result = parseSqlFormatterConfig(text);
   if (result.ok) syncSettings(result.settings);
   return result;
