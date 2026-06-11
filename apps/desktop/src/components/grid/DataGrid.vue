@@ -4165,6 +4165,13 @@ function eventTargetAllowsNativeClipboard(event: KeyboardEvent): boolean {
   return clipboardShortcut(event, "c") && hasNativeClipboardSelection();
 }
 
+function onDrawerContextMenu(event: MouseEvent) {
+  event.stopPropagation();
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("input, textarea, [contenteditable='true'], [role='textbox']")) return;
+  event.preventDefault();
+}
+
 function clipboardShortcut(event: KeyboardEvent, key: string): boolean {
   return (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === key;
 }
@@ -6837,7 +6844,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
             </template>
           </div>
           <!-- Table Info Drawer -->
-          <div v-if="showTableInfo" class="relative col-start-2 row-start-1 border-l flex flex-col bg-background min-w-0" :class="[{ 'row-span-2': cellDetailPanelIsBottom }, { 'ddl-drawer-resizing': isResizingDdl }]" :style="ddlDrawerStyle">
+          <div v-if="showTableInfo" class="relative col-start-2 row-start-1 border-l flex flex-col bg-background min-w-0" :class="[{ 'row-span-2': cellDetailPanelIsBottom }, { 'ddl-drawer-resizing': isResizingDdl }]" :style="ddlDrawerStyle" @contextmenu="onDrawerContextMenu">
             <div class="absolute left-0 top-0 bottom-0 z-20 w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-primary/30" @mousedown.prevent="onDdlResizeStart" />
             <div class="flex items-center gap-2 px-3 py-1.5 border-b shrink-0 bg-muted/20">
               <TableProperties class="w-3.5 h-3.5 text-muted-foreground" />
@@ -6987,7 +6994,13 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
             </div>
           </div>
           <!-- Cell Detail Drawer -->
-          <div v-if="showCellDetail && activeCellDetail" class="relative flex flex-col bg-background min-w-0" :class="[cellDetailPanelIsBottom ? 'col-start-1 row-start-2 border-t' : 'col-start-3 row-start-1 border-l', { 'detail-drawer-resizing': isResizingDetail }]" :style="detailPanelStyle">
+          <div
+            v-if="showCellDetail && activeCellDetail"
+            class="relative flex flex-col bg-background min-w-0"
+            :class="[cellDetailPanelIsBottom ? 'col-start-1 row-start-2 border-t' : 'col-start-3 row-start-1 border-l', { 'detail-drawer-resizing': isResizingDetail }]"
+            :style="detailPanelStyle"
+            @contextmenu="onDrawerContextMenu"
+          >
             <div v-if="!cellDetailPanelIsBottom" class="absolute left-0 top-0 bottom-0 z-20 w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-primary/30" @mousedown.prevent="onDetailResizeStart" />
             <div v-else class="absolute left-0 right-0 top-0 z-20 h-1.5 -translate-y-1/2 cursor-row-resize hover:bg-primary/30" @mousedown.prevent="onDetailResizeStart" />
             <div class="h-9 flex items-center gap-2 px-3 border-b shrink-0 bg-muted/20">
