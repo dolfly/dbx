@@ -159,6 +159,29 @@ export interface JdbcDriverInfo {
   name: string;
   path: string;
   size: number;
+  bundle_id?: string | null;
+}
+
+export interface JdbcMavenArtifactInfo {
+  group_id: string;
+  artifact_id: string;
+  version: string;
+  classifier: string;
+  extension: string;
+  file_name: string;
+  path: string;
+  size: number;
+  sha256: string;
+}
+
+export interface JdbcMavenBundleInfo {
+  id: string;
+  coordinate: string;
+  scope: string;
+  repositories: string[];
+  installed_at: string;
+  path: string;
+  artifacts: JdbcMavenArtifactInfo[];
 }
 
 export interface JdbcPluginStatus {

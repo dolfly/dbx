@@ -14,6 +14,7 @@ import type {
   DatabaseType,
   InstalledPlugin,
   JdbcDriverInfo,
+  JdbcMavenBundleInfo,
   JdbcPluginStatus,
   SidebarLayout,
   SavedSqlFile,
@@ -176,6 +177,10 @@ export async function listJdbcDrivers(): Promise<JdbcDriverInfo[]> {
   return get("/api/jdbc/drivers");
 }
 
+export async function listJdbcMavenBundles(): Promise<JdbcMavenBundleInfo[]> {
+  return get("/api/jdbc/drivers/maven");
+}
+
 export async function importJdbcDrivers(pathsOrFiles: (string | File)[]): Promise<JdbcDriverInfo[]> {
   const formData = new FormData();
   for (const item of pathsOrFiles) {
@@ -192,9 +197,17 @@ export async function importJdbcDrivers(pathsOrFiles: (string | File)[]): Promis
   return res.json();
 }
 
+export async function installJdbcDriverFromMaven(coordinate: string, repositories: string[] = []): Promise<JdbcDriverInfo[]> {
+  return post("/api/jdbc/drivers/maven", { coordinate, repositories });
+}
+
 export async function deleteJdbcDriver(path: string): Promise<JdbcDriverInfo[]> {
   const fileName = path.split("/").pop() || path;
   return del(`/api/jdbc/drivers/${encodeURIComponent(fileName)}`);
+}
+
+export async function deleteJdbcMavenBundle(bundleId: string): Promise<JdbcDriverInfo[]> {
+  return del(`/api/jdbc/drivers/maven/${encodeURIComponent(bundleId)}`);
 }
 
 export async function jdbcPluginStatus(): Promise<JdbcPluginStatus> {

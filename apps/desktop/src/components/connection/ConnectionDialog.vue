@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { ConnectionConfig, DatabaseType, JdbcDriverInfo, ProxyTunnelConfig, SshTunnelConfig, TransportLayerConfig } from "@/types/database";
+import type { ConnectionConfig, DatabaseType, JdbcDriverInfo, JdbcMavenBundleInfo, ProxyTunnelConfig, SshTunnelConfig, TransportLayerConfig } from "@/types/database";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useToast } from "@/composables/useToast";
@@ -33,6 +33,11 @@ type DbCategory = { key: string; title: string; options: DbOption[] };
 type DialogStep = "select" | "config";
 type DbPickerView = "icon" | "list";
 type ConfigTab = "connection" | "advanced" | "tls" | "transport";
+type JdbcDriverSelectItem = {
+  id: string;
+  label: string;
+  paths: string[];
+};
 
 type LegacyTransportFields = {
   ssh_enabled?: boolean;
@@ -246,6 +251,7 @@ const customDriverName = ref("");
 const mongoUseUrl = ref(false);
 const jdbcDriverPathsInput = ref("");
 const jdbcDrivers = ref<JdbcDriverInfo[]>([]);
+const jdbcMavenBundles = ref<JdbcMavenBundleInfo[]>([]);
 const agentDrivers = ref<AgentDriverInstallState[]>([]);
 const selectedJdbcDriverPath = ref("");
 const connectionUrlInput = ref("");
@@ -269,6 +275,24 @@ const colorOptions = [
 const isPresetColor = (color: string | undefined) => colorOptions.some((c) => c.value === (color || ""));
 const customColorInput = ref("");
 const customColorOpen = ref(false);
+
+const jdbcDriverSelectItems = computed<JdbcDriverSelectItem[]>(() => {
+  const bundles = jdbcMavenBundles.value.map((bundle) => ({
+    id: `maven:${bundle.id}`,
+    label: bundle.coordinate,
+    paths: bundle.artifacts.map((artifact) => artifact.path),
+  }));
+  const manual = jdbcDrivers.value
+    .filter((driver) => !driver.bundle_id)
+    .map((driver) => ({
+      id: `manual:${driver.path}`,
+      label: driver.name,
+      paths: [driver.path],
+    }));
+  return [...bundles, ...manual].sort((left, right) => left.label.localeCompare(right.label));
+});
+
+const jdbcDriverSelectItemById = computed(() => new Map(jdbcDriverSelectItems.value.map((item) => [item.id, item])));
 
 function applyCustomColor(value: string) {
   form.value.color = value;
@@ -1939,9 +1963,12 @@ async function browseJdbcDriverPaths() {
 async function loadJdbcDrivers() {
   if (!isDesktop) return;
   try {
-    jdbcDrivers.value = await api.listJdbcDrivers();
+    const [drivers, bundles] = await Promise.all([api.listJdbcDrivers(), api.listJdbcMavenBundles()]);
+    jdbcDrivers.value = drivers;
+    jdbcMavenBundles.value = bundles;
   } catch {
     jdbcDrivers.value = [];
+    jdbcMavenBundles.value = [];
   }
 }
 
@@ -1962,18 +1989,20 @@ async function loadAgentDrivers() {
   }
 }
 
-function addJdbcDriverPath(path: string) {
+function addJdbcDriverPaths(paths: string[]) {
   const existing = jdbcDriverPathsInput.value
     .split(/\r?\n/)
     .map((value) => value.trim())
     .filter(Boolean);
-  jdbcDriverPathsInput.value = Array.from(new Set([...existing, path])).join("\n");
+  jdbcDriverPathsInput.value = Array.from(new Set([...existing, ...paths])).join("\n");
 }
 
-function onJdbcDriverSelect(path: any) {
-  if (typeof path !== "string" || !path) return;
-  selectedJdbcDriverPath.value = path;
-  addJdbcDriverPath(path);
+function onJdbcDriverSelect(id: any) {
+  if (typeof id !== "string" || !id) return;
+  const item = jdbcDriverSelectItemById.value.get(id);
+  if (!item) return;
+  selectedJdbcDriverPath.value = id;
+  addJdbcDriverPaths(item.paths);
 }
 
 function openExternalUrl(url: string) {
@@ -2207,13 +2236,13 @@ function openExternalUrl(url: string) {
                   <div class="grid grid-cols-4 items-start gap-4">
                     <Label class="text-right mt-2">{{ t("connection.jdbcDriverPaths") }}</Label>
                     <div class="col-span-3 space-y-2">
-                      <Select v-if="jdbcDrivers.length > 0" :model-value="selectedJdbcDriverPath" @update:model-value="onJdbcDriverSelect">
+                      <Select v-if="jdbcDriverSelectItems.length > 0" :model-value="selectedJdbcDriverPath" @update:model-value="onJdbcDriverSelect">
                         <SelectTrigger>
                           <SelectValue :placeholder="t('connection.jdbcDriverSelectPlaceholder')" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem v-for="driver in jdbcDrivers" :key="driver.path" :value="driver.path">
-                            {{ driver.name }}
+                          <SelectItem v-for="driver in jdbcDriverSelectItems" :key="driver.id" :value="driver.id">
+                            {{ driver.label }}
                           </SelectItem>
                         </SelectContent>
                       </Select>
