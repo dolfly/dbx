@@ -54,6 +54,7 @@ import { tableMetaForDataTab } from "@/lib/tableDataTabMeta";
 import { formatShortcut } from "@/lib/shortcutRegistry";
 import { effectiveDatabaseTypeForConnection } from "@/lib/jdbcDialect";
 import { chartableColumnIndexes } from "@/lib/chartData";
+import type { SqlExecutionOverride } from "@/lib/sqlExecutionTarget";
 import { useTabScroll } from "@/composables/useTabScroll";
 import type { QueryTab, ConnectionConfig, TableInfoTab } from "@/types/database";
 import type { SqlFormatDialect } from "@/lib/sqlFormatter";
@@ -101,7 +102,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:activeOutputView": [value: "result" | "summary" | "explain" | "chart"];
   fixWithAi: [errorMessage: string];
-  execute: [sqlOverride?: string];
+  execute: [sqlOverride?: SqlExecutionOverride];
   saveSql: [];
   cancel: [];
   explain: [];
@@ -522,7 +523,7 @@ defineExpose({ focusSearch, refreshData, handleModRTarget });
               @viewport-change="emit('editorViewportChange', activeTab.id, $event)"
               @selection-state-change="emit('editorSelectionStateChange', activeTab.id, $event)"
               @format-error="emit('formatError')"
-              @execute="emit('execute')"
+              @execute="emit('execute', $event)"
               @save="emit('saveSql')"
               @click-table="onHandleClickTable"
               @view-table-data="onHandleViewTableData"

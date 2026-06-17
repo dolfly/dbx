@@ -35,7 +35,7 @@ import { quickConnectionOpenTarget } from "@/lib/connectionOpenTarget";
 import { resolveDefaultDatabase } from "@/lib/defaultDatabase";
 import { findTreeNodeById, resolveNewQueryTarget } from "@/lib/newQueryContext";
 import { buildExecutableObjectSourceStatements, objectSourceSaveExecutionMode } from "@/lib/objectSourceEditor";
-import { resolveExecutableSql, resolveExecutableSqlWithBackend } from "@/lib/sqlExecutionTarget";
+import { resolveExecutableSql, resolveExecutableSqlWithBackend, type SqlExecutionSnapshot } from "@/lib/sqlExecutionTarget";
 import { uuid } from "@/lib/utils";
 import { isTauriRuntime } from "@/lib/tauriRuntime";
 import { openQueryResultArchiveFile } from "@/lib/queryResultArchiveFile";
@@ -179,12 +179,12 @@ const executableSql = computed(() => {
     : "";
 });
 
-async function resolveActiveExecutableSql() {
+async function resolveActiveExecutableSql(snapshot?: SqlExecutionSnapshot) {
   const tab = activeTab.value;
   return tab
-    ? await resolveExecutableSqlWithBackend(tab.sql, selectedSql.value, {
+    ? await resolveExecutableSqlWithBackend(snapshot?.fullSql ?? tab.sql, snapshot?.selectedSql ?? selectedSql.value, {
         mode: settingsStore.editorSettings.executeMode,
-        cursorPos: cursorPos.value,
+        cursorPos: snapshot?.cursorPos ?? cursorPos.value,
         databaseType: activeConnection.value?.db_type,
       })
     : "";
@@ -1230,7 +1230,7 @@ onUnmounted(() => {
                   :block-dangerous-redis-commands="blockDangerousRedisCommands"
                   @update:explain-mode="(m: 'explain' | 'autotrace') => (explainMode = m)"
                   @update:block-dangerous-redis-commands="(v: boolean) => (blockDangerousRedisCommands = v)"
-                  @execute="tryExecute()"
+                  @execute="tryExecute($event)"
                   @cancel="cancelActiveExecution()"
                   @explain="tryExplain()"
                   @format-sql="formatActiveSql"
@@ -1256,7 +1256,7 @@ onUnmounted(() => {
                     :cursor-pos="cursorPos"
                     @update:active-output-view="activeOutputView = $event"
                     @fix-with-ai="fixWithAi"
-                    @execute="tryExecute()"
+                    @execute="tryExecute($event)"
                     @cancel="cancelActiveExecution()"
                     @explain="tryExplain()"
                     @editor-update="(tabId: string, v: string) => queryStore.updateSql(tabId, v)"

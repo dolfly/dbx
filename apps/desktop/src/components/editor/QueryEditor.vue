@@ -8,7 +8,7 @@ import { search as cmSearch } from "@codemirror/search";
 import EditorSearchPanel from "./EditorSearchPanel.vue";
 import CustomContextMenu, { type ContextMenuItem } from "@/components/ui/CustomContextMenu.vue";
 import { copyToClipboard } from "@/lib/clipboard";
-import { resolveExecutableSql } from "@/lib/sqlExecutionTarget";
+import { resolveExecutableSql, type SqlExecutionSnapshot } from "@/lib/sqlExecutionTarget";
 import { formatSqlText, type SqlFormatDialect } from "@/lib/sqlFormatter";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -64,7 +64,7 @@ const emit = defineEmits<{
   selectionChange: [value: string];
   cursorChange: [pos: number];
   formatError: [message: string];
-  execute: [sql: string];
+  execute: [snapshot: SqlExecutionSnapshot];
   save: [];
   clickTable: [tableName: string];
   viewTableData: [tableName: string];
@@ -288,7 +288,7 @@ function handleTab(view: EditorViewType): boolean {
 }
 
 function executeCurrentSql() {
-  if (view.value) emit("execute", executableSqlFromView(view.value));
+  if (view.value) emit("execute", sqlExecutionSnapshotFromView(view.value));
   return true;
 }
 
@@ -459,6 +459,14 @@ function selectedSqlFromView(currentView: EditorViewType): string {
 
 function executableSqlFromView(currentView: EditorViewType): string {
   return resolveExecutableSql(currentView.state.doc.toString(), selectedSqlFromView(currentView));
+}
+
+function sqlExecutionSnapshotFromView(currentView: EditorViewType): SqlExecutionSnapshot {
+  return {
+    fullSql: currentView.state.doc.toString(),
+    selectedSql: selectedSqlFromView(currentView),
+    cursorPos: currentView.state.selection.main.head,
+  };
 }
 
 function identifierRangeAt(sql: string, pos: number): { from: number; to: number; text: string } | null {
