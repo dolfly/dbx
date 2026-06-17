@@ -1,0 +1,47 @@
+name: Sync Release to CNB
+
+on:
+  release:
+    types: [released, published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to sync (e.g. v0.5.33)'
+        required: true
+        type: string
+      skip_tag_push:
+        description: 'Skip pushing git tag to CNB'
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push tag to CNB
+        if: github.event_name == 'release' || inputs.skip_tag_push != true
+        run: |
+          git push https://cnb:${{ secrets.CNB_TOKEN }}@cnb.cool/dbxio.com/dbx.git "${{ steps.tag.outputs.tag }}"
+
+      - name: Sync release assets to CNB
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/sync-release-to-cnb.py "${{ steps.tag.outputs.tag }}" --skip-tag-push
