@@ -68,6 +68,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import LightTooltip from "@/components/ui/LightTooltip.vue";
 import LightDropdown from "@/components/ui/LightDropdown.vue";
+import LightDropdownMenu from "@/components/ui/LightDropdownMenu.vue";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -146,6 +147,12 @@ const settingsStore = useSettingsStore();
 const { isDark } = useTheme();
 const { toast } = useToast();
 const { highlight } = useSqlHighlighter();
+const binaryCellDownloadMenuItems = computed(() =>
+  BINARY_CELL_DOWNLOAD_MODES.map((mode) => ({
+    label: t(`grid.binaryDownload.${mode}`),
+    value: mode,
+  })),
+);
 
 interface PreparedCopyValue {
   key: string;
@@ -648,6 +655,30 @@ function openCompactLocalFilter(colIdx: number) {
       openLocalFilter(colIdx);
     }, 0);
   });
+}
+
+function compactColumnActionMenuItems(columnName: string) {
+  return [
+    {
+      label: t("grid.columnFormatter"),
+      value: "formatter",
+      icon: Code2,
+      disabled: !formatterKeyForColumn(columnName),
+    },
+    {
+      label: t("grid.localFilter"),
+      value: "localFilter",
+      icon: Filter,
+    },
+  ];
+}
+
+function selectCompactColumnAction(value: string, columnIndex: number) {
+  if (value === "formatter") {
+    openCompactColumnFormatter(columnIndex);
+  } else if (value === "localFilter") {
+    openCompactLocalFilter(columnIndex);
+  }
 }
 
 function handleLocalFilterOpenChange(value: boolean, columnIndex: number) {
@@ -6659,18 +6690,22 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                       <template v-else>
                         {{ cell.display }}
                         <div v-if="cellDetailButtonVisible(cell.recordIndex, cell.valueIndex)" class="absolute right-0.5 top-0.5 flex items-center gap-1">
-                          <DropdownMenu v-if="canQuickDownloadCellValue(cell.recordIndex, cell.valueIndex)" :open="quickDownloadMenuOpenFor(cell.recordIndex, cell.valueIndex)" @update:open="(value: boolean) => handleQuickDownloadMenuOpenChange(value, cell.recordIndex, cell.valueIndex)">
-                            <DropdownMenuTrigger as-child>
-                              <button class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground" :title="t('grid.downloadBinaryValue')" @mousedown.stop @click.stop>
+                          <LightDropdownMenu
+                            v-if="canQuickDownloadCellValue(cell.recordIndex, cell.valueIndex)"
+                            :items="binaryCellDownloadMenuItems"
+                            :open="quickDownloadMenuOpenFor(cell.recordIndex, cell.valueIndex)"
+                            align="end"
+                            content-class="w-44"
+                            :match-trigger-width="false"
+                            @update:open="(value: boolean) => handleQuickDownloadMenuOpenChange(value, cell.recordIndex, cell.valueIndex)"
+                            @select="(mode: string) => downloadCellBinaryValue(cell.recordIndex, cell.valueIndex, mode as BinaryCellDownloadMode)"
+                          >
+                            <template #trigger="{ open, toggle }">
+                              <button class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground" :title="t('grid.downloadBinaryValue')" :aria-expanded="open" @mousedown.stop @click.stop="toggle">
                                 <Download class="h-3 w-3" />
                               </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem v-for="mode in BINARY_CELL_DOWNLOAD_MODES" :key="mode" @click="downloadCellBinaryValue(cell.recordIndex, cell.valueIndex, mode)">
-                                {{ t(`grid.binaryDownload.${mode}`) }}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            </template>
+                          </LightDropdownMenu>
                           <button
                             class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground"
                             :title="t('grid.cellDetails')"
@@ -6735,29 +6770,31 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           <ArrowDown v-else-if="sortCol === col.name && sortColIndex === col.actualColIdx && sortDir === 'desc'" class="h-3 w-3 shrink-0" />
                           <ArrowUpDown v-else class="h-3 w-3 shrink-0" />
                         </button>
-                        <DropdownMenu v-if="compactColumnHeaderActions" :open="headerActionMenuOpenColumn === col.actualColIdx" @update:open="(value: boolean) => (headerActionMenuOpenColumn = value ? col.actualColIdx : null)">
-                          <DropdownMenuTrigger as-child>
+                        <LightDropdownMenu
+                          v-if="compactColumnHeaderActions"
+                          :items="compactColumnActionMenuItems(col.name)"
+                          :open="headerActionMenuOpenColumn === col.actualColIdx"
+                          align="end"
+                          content-class="w-max min-w-28 max-w-48 p-0.5"
+                          item-class="gap-1 px-1.5 py-0.5 text-xs"
+                          item-icon-class="h-3 w-3"
+                          :match-trigger-width="false"
+                          @update:open="(value: boolean) => (headerActionMenuOpenColumn = value ? col.actualColIdx : null)"
+                          @select="(value: string) => selectCompactColumnAction(value, col.actualColIdx)"
+                        >
+                          <template #trigger="{ open, toggle }">
                             <button
                               type="button"
                               class="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-foreground"
                               :class="columnHasFormatter(col.actualColIdx) || localFilterActive(col.actualColIdx) ? 'text-primary opacity-90' : 'opacity-80'"
                               :title="t('grid.columnActions')"
-                              @click.stop
+                              :aria-expanded="open"
+                              @click.stop="toggle"
                             >
                               <ChevronDown class="h-3 w-3" />
                             </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" class="w-max min-w-28 max-w-48 p-0.5" @click.stop @keydown.stop>
-                            <DropdownMenuItem class="gap-1 px-1.5 py-0.5 text-xs" :disabled="!formatterKeyForColumn(col.name)" @select.prevent="openCompactColumnFormatter(col.actualColIdx)">
-                              <Code2 class="h-3 w-3" />
-                              {{ t("grid.columnFormatter") }}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem class="gap-1 px-1.5 py-0.5 text-xs" @select.prevent="openCompactLocalFilter(col.actualColIdx)">
-                              <Filter class="h-3 w-3" />
-                              {{ t("grid.localFilter") }}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          </template>
+                        </LightDropdownMenu>
                         <Popover :open="formatterOpenColumn === col.actualColIdx" @update:open="(value: boolean) => handleColumnFormatterOpenChange(value, col.actualColIdx)">
                           <PopoverAnchor v-if="compactColumnHeaderActions" as-child>
                             <span class="pointer-events-none absolute right-3 top-1/2 h-px w-px -translate-y-1/2" />
@@ -7052,22 +7089,22 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                       />
                     </div>
                     <div v-if="canvasDetailButtonCell" class="absolute pointer-events-auto z-20 flex items-center gap-1" :style="canvasDetailButtonStyle" @mouseenter="keepCanvasDetailHover" @mouseleave="clearCanvasDetailHover">
-                      <DropdownMenu
+                      <LightDropdownMenu
                         v-if="canvasDetailButtonCell.canQuickDownload"
+                        :items="binaryCellDownloadMenuItems"
                         :open="quickDownloadMenuOpenFor(canvasDetailButtonCell.rowIndex, canvasDetailButtonCell.actualColIdx)"
+                        align="end"
+                        content-class="w-44"
+                        :match-trigger-width="false"
                         @update:open="(value: boolean) => handleQuickDownloadMenuOpenChange(value, canvasDetailButtonCell!.rowIndex, canvasDetailButtonCell!.actualColIdx)"
+                        @select="(mode: string) => downloadCellBinaryValue(canvasDetailButtonCell!.rowIndex, canvasDetailButtonCell!.actualColIdx, mode as BinaryCellDownloadMode)"
                       >
-                        <DropdownMenuTrigger as-child>
-                          <button class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground" :title="t('grid.downloadBinaryValue')" @mousedown.stop @click.stop>
+                        <template #trigger="{ open, toggle }">
+                          <button class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground" :title="t('grid.downloadBinaryValue')" :aria-expanded="open" @mousedown.stop @click.stop="toggle">
                             <Download class="h-3 w-3" />
                           </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" class="w-44">
-                          <DropdownMenuItem v-for="mode in BINARY_CELL_DOWNLOAD_MODES" :key="mode" @click="downloadCellBinaryValue(canvasDetailButtonCell.rowIndex, canvasDetailButtonCell.actualColIdx, mode)">
-                            {{ t(`grid.binaryDownload.${mode}`) }}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        </template>
+                      </LightDropdownMenu>
                       <button
                         class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground"
                         :title="t('grid.cellDetails')"
@@ -7164,18 +7201,22 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                       <template v-else>
                         {{ formatCellCached(item.data[col.actualColIdx], col.actualColIdx) }}
                         <div v-if="cellDetailButtonVisible(item.displayIndex, col.actualColIdx)" class="absolute right-0.5 top-0.5 flex items-center gap-1">
-                          <DropdownMenu v-if="canQuickDownloadCellValue(item.displayIndex, col.actualColIdx)" :open="quickDownloadMenuOpenFor(item.displayIndex, col.actualColIdx)" @update:open="(value: boolean) => handleQuickDownloadMenuOpenChange(value, item.displayIndex, col.actualColIdx)">
-                            <DropdownMenuTrigger as-child>
-                              <button class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground" :title="t('grid.downloadBinaryValue')" @mousedown.stop @click.stop>
+                          <LightDropdownMenu
+                            v-if="canQuickDownloadCellValue(item.displayIndex, col.actualColIdx)"
+                            :items="binaryCellDownloadMenuItems"
+                            :open="quickDownloadMenuOpenFor(item.displayIndex, col.actualColIdx)"
+                            align="end"
+                            content-class="w-44"
+                            :match-trigger-width="false"
+                            @update:open="(value: boolean) => handleQuickDownloadMenuOpenChange(value, item.displayIndex, col.actualColIdx)"
+                            @select="(mode: string) => downloadCellBinaryValue(item.displayIndex, col.actualColIdx, mode as BinaryCellDownloadMode)"
+                          >
+                            <template #trigger="{ open, toggle }">
+                              <button class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground" :title="t('grid.downloadBinaryValue')" :aria-expanded="open" @mousedown.stop @click.stop="toggle">
                                 <Download class="h-3 w-3" />
                               </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-44">
-                              <DropdownMenuItem v-for="mode in BINARY_CELL_DOWNLOAD_MODES" :key="mode" @click="downloadCellBinaryValue(item.displayIndex, col.actualColIdx, mode)">
-                                {{ t(`grid.binaryDownload.${mode}`) }}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            </template>
+                          </LightDropdownMenu>
                           <button
                             class="flex h-5 w-5 items-center justify-center rounded bg-background/90 text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground"
                             :title="t('grid.cellDetails')"
