@@ -20,8 +20,8 @@ use tokio_postgres::{Row, SimpleQueryMessage};
 use super::file_validator::validate_file_path;
 use crate::sql::starts_with_executable_sql_keyword;
 use crate::types::{
-    ColumnInfo, DatabaseInfo, ForeignKeyInfo, FunctionInfo, IndexInfo, ObjectInfo, OwnerInfo, QueryResult, RuleInfo,
-    SequenceInfo, TableInfo, TriggerInfo,
+    ColumnInfo, DatabaseInfo, ForeignKeyInfo, FunctionInfo, IndexInfo, ObjectInfo, ObjectStatistics, OwnerInfo,
+    QueryResult, RuleInfo, SequenceInfo, TableInfo, TriggerInfo,
 };
 
 fn pg_temporal_to_json_value(row: &Row, idx: usize) -> Option<serde_json::Value> {
@@ -420,6 +420,11 @@ fn should_retry_postgres_text_query(err: &tokio_postgres::Error) -> bool {
         || message.contains("cannot display a value of type")
 }
 
+fn should_retry_postgres_stale_cache(err: &tokio_postgres::Error) -> bool {
+    let message = err.as_db_error().map(ToString::to_string).unwrap_or_else(|| err.to_string()).to_ascii_lowercase();
+    message.contains("cached plan must not change result type")
+}
+
 async fn execute_select_prepared(
     client: &deadpool_postgres::Client,
     sql: &str,
@@ -542,6 +547,20 @@ async fn execute_select_query(
 ) -> Result<QueryResult, String> {
     match execute_select_prepared(client, sql, start, row_limit).await {
         Ok(result) => Ok(result),
+        Err(err) if should_retry_postgres_stale_cache(&err) => {
+            // The cached prepared statement is stale (e.g. the view or table
+            // schema changed since the statement was prepared). Evict the
+            // stale entry and retry with a fresh server-side prepare.
+            log::warn!("[postgres][select:stale_cache] evicting cached statement: {}", pg_error_to_string(err));
+            client.statement_cache.remove(sql, &[]);
+            match execute_select_prepared(client, sql, start, row_limit).await {
+                Ok(result) => Ok(result),
+                Err(err) if should_retry_postgres_text_query(&err) => {
+                    execute_select_text(client, sql, start, row_limit).await
+                }
+                Err(err) => Err(pg_error_to_string(err)),
+            }
+        }
         Err(err) if should_retry_postgres_text_query(&err) => execute_select_text(client, sql, start, row_limit).await,
         Err(err) => Err(pg_error_to_string(err)),
     }
@@ -1079,6 +1098,33 @@ pub async fn list_objects(pool: &Pool, schema: &str) -> Result<Vec<ObjectInfo>, 
             updated_at: row.try_get::<_, Option<String>>(4).ok().flatten().filter(|s| !s.is_empty()),
             parent_schema: row.try_get::<_, Option<String>>(5).ok().flatten().filter(|s| !s.is_empty()),
             parent_name: row.try_get::<_, Option<String>>(6).ok().flatten().filter(|s| !s.is_empty()),
+        })
+        .collect())
+}
+
+pub async fn list_object_statistics(pool: &Pool, schema: &str) -> Result<Vec<ObjectStatistics>, String> {
+    let schema = if schema.is_empty() { "public" } else { schema };
+    let client = pool.get().await.map_err(|e| e.to_string())?;
+    let stmt = client
+        .prepare_cached(
+            "SELECT c.relname, \
+                    GREATEST(c.reltuples, 0)::bigint AS estimated_rows, \
+                    pg_catalog.pg_total_relation_size(c.oid)::bigint AS total_bytes \
+             FROM pg_catalog.pg_class c \
+             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+             WHERE n.nspname = $1 AND c.relkind IN ('r','m','f','p') \
+             ORDER BY c.relname",
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows = client.query(&stmt, &[&schema]).await.map_err(|e| e.to_string())?;
+    Ok(rows
+        .iter()
+        .map(|row| ObjectStatistics {
+            name: row.get::<_, String>(0),
+            schema: Some(schema.to_string()),
+            estimated_rows: row.try_get::<_, i64>(1).ok(),
+            total_bytes: row.try_get::<_, i64>(2).ok(),
         })
         .collect())
 }

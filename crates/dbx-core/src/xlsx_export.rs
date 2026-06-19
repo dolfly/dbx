@@ -78,10 +78,10 @@ pub(crate) fn start_streaming_xlsx_workbook<W: Write + Seek>(
     let widths = estimate_header_widths(columns);
 
     let mut zip = zip::ZipWriter::new(writer);
-    write_zip_entry(&mut zip, "[Content_Types].xml", content_types_xml())?;
+    write_zip_entry(&mut zip, "[Content_Types].xml", &content_types_xml())?;
     write_zip_entry(&mut zip, "_rels/.rels", root_rels_xml())?;
     write_zip_entry(&mut zip, "xl/workbook.xml", &workbook_xml(&sheet_name))?;
-    write_zip_entry(&mut zip, "xl/_rels/workbook.xml.rels", workbook_rels_xml())?;
+    write_zip_entry(&mut zip, "xl/_rels/workbook.xml.rels", &workbook_rels_xml())?;
     write_zip_entry(&mut zip, "xl/styles.xml", styles_xml())?;
 
     // Begin the sheet1.xml entry with header, frozen pane, column widths and
@@ -299,16 +299,30 @@ fn worksheet_xml(data: &XlsxWorksheetData) -> String {
     )
 }
 
-fn content_types_xml() -> &'static str {
-    concat!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
-        "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">",
-        "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>",
-        "<Default Extension=\"xml\" ContentType=\"application/xml\"/>",
-        "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>",
-        "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>",
-        "<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>",
-        "</Types>"
+fn content_types_xml() -> String {
+    content_types_xml_for_sheet_count(1)
+}
+
+fn content_types_xml_for_sheet_count(sheet_count: usize) -> String {
+    let worksheet_overrides = (1..=sheet_count)
+        .map(|index| {
+            format!(
+                "<Override PartName=\"/xl/worksheets/sheet{index}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+            )
+        })
+        .collect::<String>();
+    format!(
+        concat!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
+            "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">",
+            "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>",
+            "<Default Extension=\"xml\" ContentType=\"application/xml\"/>",
+            "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>",
+            "{}",
+            "<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>",
+            "</Types>"
+        ),
+        worksheet_overrides
     )
 }
 
@@ -322,24 +336,51 @@ fn root_rels_xml() -> &'static str {
 }
 
 fn workbook_xml(sheet_name: &str) -> String {
+    workbook_xml_for_sheets(&[sheet_name.to_string()])
+}
+
+fn workbook_xml_for_sheets(sheet_names: &[String]) -> String {
+    let sheets = sheet_names
+        .iter()
+        .enumerate()
+        .map(|(index, sheet_name)| {
+            let sheet_id = index + 1;
+            format!("<sheet name=\"{}\" sheetId=\"{sheet_id}\" r:id=\"rId{sheet_id}\"/>", escape_xml(sheet_name))
+        })
+        .collect::<String>();
     format!(
         concat!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
             "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">",
-            "<sheets><sheet name=\"{}\" sheetId=\"1\" r:id=\"rId1\"/></sheets>",
+            "<sheets>{}</sheets>",
             "</workbook>"
         ),
-        escape_xml(sheet_name)
+        sheets
     )
 }
 
-fn workbook_rels_xml() -> &'static str {
-    concat!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
-        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">",
-        "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>",
-        "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>",
-        "</Relationships>"
+fn workbook_rels_xml() -> String {
+    workbook_rels_xml_for_sheet_count(1)
+}
+
+fn workbook_rels_xml_for_sheet_count(sheet_count: usize) -> String {
+    let worksheet_rels = (1..=sheet_count)
+        .map(|index| {
+            format!(
+                "<Relationship Id=\"rId{index}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet{index}.xml\"/>"
+            )
+        })
+        .collect::<String>();
+    let styles_id = sheet_count + 1;
+    format!(
+        concat!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">",
+            "{}",
+            "<Relationship Id=\"rId{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>",
+            "</Relationships>"
+        ),
+        worksheet_rels, styles_id
     )
 }
 
@@ -357,15 +398,38 @@ fn styles_xml() -> &'static str {
     )
 }
 
+fn normalize_unique_sheet_names(sheets: &[XlsxWorksheetData]) -> Vec<String> {
+    let mut names = Vec::with_capacity(sheets.len());
+    for (index, sheet) in sheets.iter().enumerate() {
+        let base = normalize_sheet_name(sheet.sheet_name.as_deref().or(Some(&format!("Sheet{}", index + 1))));
+        let mut candidate = base.clone();
+        let mut suffix = 2;
+        while names.iter().any(|name| name == &candidate) {
+            let suffix_text = format!(" ({suffix})");
+            let max_base_len = 31usize.saturating_sub(suffix_text.chars().count());
+            candidate = format!("{}{}", base.chars().take(max_base_len).collect::<String>(), suffix_text);
+            suffix += 1;
+        }
+        names.push(candidate);
+    }
+    names
+}
+
 pub fn build_xlsx_workbook(data: &XlsxWorksheetData) -> Result<Vec<u8>, String> {
-    let sheet_name = normalize_sheet_name(data.sheet_name.as_deref());
+    build_xlsx_workbook_multi(std::slice::from_ref(data))
+}
+
+pub fn build_xlsx_workbook_multi(sheets: &[XlsxWorksheetData]) -> Result<Vec<u8>, String> {
+    if sheets.is_empty() {
+        return Err("At least one worksheet is required".to_string());
+    }
+    let sheet_names = normalize_unique_sheet_names(sheets);
     let files = vec![
-        ("[Content_Types].xml", content_types_xml().to_string()),
+        ("[Content_Types].xml", content_types_xml_for_sheet_count(sheets.len())),
         ("_rels/.rels", root_rels_xml().to_string()),
-        ("xl/workbook.xml", workbook_xml(&sheet_name)),
-        ("xl/_rels/workbook.xml.rels", workbook_rels_xml().to_string()),
+        ("xl/workbook.xml", workbook_xml_for_sheets(&sheet_names)),
+        ("xl/_rels/workbook.xml.rels", workbook_rels_xml_for_sheet_count(sheets.len())),
         ("xl/styles.xml", styles_xml().to_string()),
-        ("xl/worksheets/sheet1.xml", worksheet_xml(data)),
     ];
 
     let cursor = Cursor::new(Vec::<u8>::new());
@@ -376,6 +440,10 @@ pub fn build_xlsx_workbook(data: &XlsxWorksheetData) -> Result<Vec<u8>, String> 
         zip.start_file(path, options).map_err(|err| err.to_string())?;
         zip.write_all(content.as_bytes()).map_err(|err| err.to_string())?;
     }
+    for (index, sheet) in sheets.iter().enumerate() {
+        zip.start_file(format!("xl/worksheets/sheet{}.xml", index + 1), options).map_err(|err| err.to_string())?;
+        zip.write_all(worksheet_xml(sheet).as_bytes()).map_err(|err| err.to_string())?;
+    }
 
     let output = zip.finish().map_err(|err| err.to_string())?;
     Ok(output.into_inner())
@@ -383,7 +451,7 @@ pub fn build_xlsx_workbook(data: &XlsxWorksheetData) -> Result<Vec<u8>, String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{build_xlsx_workbook, start_streaming_xlsx_workbook, XlsxWorksheetData};
+    use super::{build_xlsx_workbook, build_xlsx_workbook_multi, start_streaming_xlsx_workbook, XlsxWorksheetData};
     use calamine::{open_workbook_auto, Reader};
     use serde_json::json;
     use std::fs;
@@ -418,6 +486,34 @@ mod tests {
         .expect("build workbook");
         let text = String::from_utf8_lossy(&workbook);
         assert!(text.contains("name=\"bad name with chars and-a-very-\""));
+    }
+
+    #[test]
+    fn builds_multi_sheet_xlsx_workbook() {
+        let path = std::env::temp_dir().join(format!("dbx-multi-sheet-test-{}.xlsx", uuid::Uuid::new_v4()));
+        let workbook = build_xlsx_workbook_multi(&[
+            XlsxWorksheetData {
+                sheet_name: Some("Result 1".to_string()),
+                columns: vec!["id".to_string()],
+                rows: vec![vec![json!(1)]],
+            },
+            XlsxWorksheetData {
+                sheet_name: Some("Result 2".to_string()),
+                columns: vec!["name".to_string()],
+                rows: vec![vec![json!("Ada")]],
+            },
+        ])
+        .expect("build multi-sheet workbook");
+        fs::write(&path, workbook).expect("write temp workbook");
+
+        let mut workbook = open_workbook_auto(&path).expect("open workbook");
+        let names = workbook.sheet_names().to_vec();
+        assert_eq!(names, vec!["Result 1".to_string(), "Result 2".to_string()]);
+        let first = workbook.worksheet_range("Result 1").expect("read first worksheet");
+        let second = workbook.worksheet_range("Result 2").expect("read second worksheet");
+        assert_eq!(first.get_value((1, 0)).expect("first row"), &calamine::Data::Float(1.0));
+        assert_eq!(second.get_value((1, 0)).expect("second row"), &calamine::Data::String("Ada".to_string()));
+        let _ = fs::remove_file(&path);
     }
 
     #[test]

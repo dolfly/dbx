@@ -293,6 +293,8 @@ export const useConnectionStore = defineStore("connection", () => {
       mongodb: "MongoDB",
       oracle: "Oracle",
       elasticsearch: "Elasticsearch",
+      qdrant: "Qdrant",
+      milvus: "Milvus",
       doris: "Doris",
       starrocks: "StarRocks",
       manticoresearch: "Manticore Search",
@@ -788,6 +790,8 @@ export const useConnectionStore = defineStore("connection", () => {
       await loadMongoDatabases(connectionId);
     } else if (config.db_type === "elasticsearch") {
       await loadElasticsearchIndices(connectionId);
+    } else if (config.db_type === "qdrant" || config.db_type === "milvus") {
+      await loadVectorCollections(connectionId);
     } else if (config.db_type === "mq") {
       await loadMqTenants(connectionId, { force: true });
     } else {
@@ -1198,9 +1202,41 @@ export const useConnectionStore = defineStore("connection", () => {
         withSavedSqlRoot(
           connectionId,
           sortSidebarNames(indices).map((index) => ({
-            id: `${connectionId}:__es_index:${index}`,
+            id: `${connectionId}:__collection:${index}`,
             label: index,
             type: "elasticsearch-index" as const,
+            connectionId,
+            database: "default",
+            isExpanded: false,
+          })),
+          node,
+        ),
+      );
+      node.isExpanded = true;
+    } catch (e) {
+      recordMetadataLoadError(connectionId, e);
+      throw e;
+    } finally {
+      node.isLoading = false;
+    }
+  }
+
+  async function loadVectorCollections(connectionId: string) {
+    const node = findNode(treeNodes.value, connectionId);
+    if (!node) return;
+
+    node.isLoading = true;
+    try {
+      await ensureConnected(connectionId);
+      const collections = await api.vectorListCollections(connectionId);
+      setChildren(
+        node,
+        withSavedSqlRoot(
+          connectionId,
+          sortSidebarNames(collections).map((collection) => ({
+            id: `${connectionId}:__vector_collection:${collection}`,
+            label: collection,
+            type: "vector-collection" as const,
             connectionId,
             database: "default",
             isExpanded: false,
@@ -1822,6 +1858,8 @@ export const useConnectionStore = defineStore("connection", () => {
         await loadMongoDatabases(node.connectionId);
       } else if (config?.db_type === "elasticsearch") {
         await loadElasticsearchIndices(node.connectionId);
+      } else if (config?.db_type === "qdrant" || config?.db_type === "milvus") {
+        await loadVectorCollections(node.connectionId);
       } else if (config?.db_type === "mq") {
         await loadMqTenants(node.connectionId, options);
       } else {
@@ -2967,6 +3005,7 @@ export const useConnectionStore = defineStore("connection", () => {
     updateRedisDbKeyStats,
     loadMongoDatabases,
     loadElasticsearchIndices,
+    loadVectorCollections,
     loadMongoCollections,
     loadSchemas,
     loadSqlServerDatabaseObjects,

@@ -59,14 +59,19 @@ fn is_multi_host_mongo_uri(url: &str) -> bool {
     host_section.contains(',')
 }
 
-pub async fn test_connection(client: &Client, _timeout: Duration, database: Option<&str>) -> Result<(), String> {
+pub async fn test_connection(client: &Client, timeout: Duration, database: Option<&str>) -> Result<(), String> {
     let database = database.map(str::trim).filter(|value| !value.is_empty()).unwrap_or("admin");
-    client
-        .database(database)
-        .run_command(doc! { "ping": 1 })
-        .await
-        .map(|_| ())
-        .map_err(|e| format!("MongoDB connection failed: {e}"))
+    let client = client.clone();
+    let database = database.to_string();
+    with_connection_timeout("MongoDB", timeout, async move {
+        client
+            .database(&database)
+            .run_command(doc! { "ping": 1 })
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("MongoDB connection failed: {e}"))
+    })
+    .await
 }
 
 pub async fn list_databases(client: &Client) -> Result<Vec<String>, String> {

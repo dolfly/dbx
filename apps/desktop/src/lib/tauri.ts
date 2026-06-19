@@ -6,6 +6,7 @@ import type {
   LinkedServerInfo,
   TableInfo,
   ObjectInfo,
+  ObjectStatistics,
   ObjectSource,
   ObjectSourceKind,
   ColumnInfo,
@@ -510,6 +511,10 @@ export async function listTables(connectionId: string, database: string, schema:
 
 export async function listObjects(connectionId: string, database: string, schema: string, objectTypes?: SidebarObjectKind[]): Promise<ObjectInfo[]> {
   return invoke("list_objects", { connectionId, database, schema, objectTypes });
+}
+
+export async function listObjectStatistics(connectionId: string, database: string, schema: string): Promise<ObjectStatistics[]> {
+  return invoke("list_object_statistics", { connectionId, database, schema });
 }
 
 export async function listCompletionObjects(connectionId: string, database: string, schema: string): Promise<ObjectInfo[]> {
@@ -1300,6 +1305,10 @@ export async function elasticsearchListIndices(connectionId: string): Promise<st
   return mongoListCollections(connectionId, "default");
 }
 
+export async function vectorListCollections(connectionId: string): Promise<string[]> {
+  return mongoListCollections(connectionId, "default");
+}
+
 export async function mongoFindDocuments(connectionId: string, database: string, collection: string, skip: number, limit: number, filter?: string, sort?: string, executionId?: string): Promise<MongoDocumentResult> {
   return invoke("mongo_find_documents", { connectionId, database, collection, skip, limit, filter, sort, executionId });
 }
@@ -1444,6 +1453,7 @@ export async function listenSqlFileProgress(handler: (progress: SqlFileProgress)
 
 // --- Data Transfer ---
 export type TransferMode = "append" | "overwrite" | "upsert";
+export type TransferTableNameCase = "preserve" | "lower" | "upper";
 
 export interface TransferRequest {
   transferId: string;
@@ -1456,6 +1466,7 @@ export interface TransferRequest {
   tables: string[];
   createTable: boolean;
   mode: TransferMode;
+  targetTableNameCase: TransferTableNameCase;
   batchSize: number;
 }
 
@@ -1738,6 +1749,15 @@ export async function exportQueryResultXlsx(filePath: string, sheetName: string 
       sheetName,
       columns,
       rows,
+    },
+  });
+}
+
+export async function exportQueryResultsXlsx(filePath: string, worksheets: readonly { sheetName?: string; columns: string[]; rows: readonly (readonly XlsxCellValue[])[] }[]): Promise<void> {
+  return invoke("export_query_results_xlsx", {
+    request: {
+      filePath,
+      worksheets,
     },
   });
 }

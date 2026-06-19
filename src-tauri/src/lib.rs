@@ -8,7 +8,6 @@ use commands::connection::AppState;
 use dbx_core::storage::{DesktopIconTheme, DesktopSettings, Storage};
 use std::sync::Arc;
 use std::time::Instant;
-#[cfg(target_os = "macos")]
 use tauri::RunEvent;
 use tauri::{
     menu::MenuBuilder,
@@ -380,6 +379,7 @@ pub fn run() {
             commands::schema::list_sqlserver_linked_server_tables,
             commands::schema::list_tables,
             commands::schema::list_objects,
+            commands::schema::list_object_statistics,
             commands::schema::list_completion_objects,
             commands::schema::get_object_source,
             commands::schema::list_schemas,
@@ -614,6 +614,7 @@ pub fn run() {
             commands::csv_export::export_query_result_csv,
             commands::csv_export::export_table_data_csv,
             commands::xlsx_export::export_query_result_xlsx,
+            commands::xlsx_export::export_query_results_xlsx,
             commands::text_export::export_query_result_json,
             commands::text_export::export_query_result_markdown,
             commands::agents::list_installed_agents,
@@ -691,6 +692,15 @@ pub fn run() {
                 if !has_visible_windows {
                     show_main_window(app_handle);
                 }
+                let app_handle = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(state) = app_handle.try_state::<AppState>() {
+                        state.refresh_connections().await;
+                    }
+                });
+            }
+
+            if let RunEvent::Resumed = &event {
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Some(state) = app_handle.try_state::<AppState>() {

@@ -395,6 +395,16 @@ function formatActiveSql() {
   };
 }
 
+function toggleSqlKeywordCase() {
+  const sqlFormatter = settingsStore.editorSettings.sqlFormatter;
+  settingsStore.updateEditorSettings({
+    sqlFormatter: {
+      ...sqlFormatter,
+      keywordCase: sqlFormatter.keywordCase === "lower" ? "upper" : "lower",
+    },
+  });
+}
+
 function defaultSavedSqlName(title: string) {
   const trimmed = title.trim() || "query";
   const normalized = trimmed.replace(/\s+/g, "_");
@@ -1237,12 +1247,14 @@ onUnmounted(() => {
                   :executable-sql="executableSql"
                   :explain-mode="explainMode"
                   :block-dangerous-redis-commands="blockDangerousRedisCommands"
+                  :sql-keyword-case="settingsStore.editorSettings.sqlFormatter.keywordCase"
                   @update:explain-mode="(m: 'explain' | 'autotrace') => (explainMode = m)"
                   @update:block-dangerous-redis-commands="(v: boolean) => (blockDangerousRedisCommands = v)"
                   @execute="tryExecute($event)"
                   @cancel="cancelActiveExecution()"
                   @explain="tryExplain()"
                   @format-sql="formatActiveSql"
+                  @toggle-sql-keyword-case="toggleSqlKeywordCase"
                   @save-sql="void openSaveSqlDialog()"
                   @open-sql="openSqlFile"
                   @import-result-archive="importResultArchive"

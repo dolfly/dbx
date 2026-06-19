@@ -1062,6 +1062,7 @@ async function provideSqlCompletions(currentState: import("@codemirror/state").E
         snippets: settingsStore.editorSettings.snippets,
         dialect: props.dialect,
         databaseType: props.databaseType,
+        keywordCase: settingsStore.editorSettings.sqlFormatter.keywordCase,
       });
       return buildCompletionResult(items, position - completionContext.prefix.length, getSqlCompletionResultValidFor(fullDoc, position));
     }
@@ -1079,6 +1080,7 @@ async function provideSqlCompletions(currentState: import("@codemirror/state").E
         snippets: settingsStore.editorSettings.snippets,
         dialect: props.dialect,
         databaseType: props.databaseType,
+        keywordCase: settingsStore.editorSettings.sqlFormatter.keywordCase,
       });
       return buildCompletionResult(items, position - completionContext.prefix.length, getSqlCompletionResultValidFor(fullDoc, position));
     }
@@ -1222,6 +1224,7 @@ function buildLocalSqlCompletionResult(completionContext: ReturnType<typeof getS
     snippets: settingsStore.editorSettings.snippets,
     dialect: props.dialect,
     databaseType: props.databaseType,
+    keywordCase: settingsStore.editorSettings.sqlFormatter.keywordCase,
   });
 
   return buildCompletionResult(items, position - completionContext.prefix.length, getSqlCompletionResultValidFor(fullDoc, position));
@@ -1508,6 +1511,7 @@ async function performAsyncCompletionWithResult(epoch: number, completionContext
     snippets: settingsStore.editorSettings.snippets,
     dialect: props.dialect,
     databaseType: props.databaseType,
+    keywordCase: settingsStore.editorSettings.sqlFormatter.keywordCase,
   });
 
   return buildCompletionResult(items, position - completionContext.prefix.length, getSqlCompletionResultValidFor(fullDoc, position));

@@ -70,6 +70,10 @@ export function tabDisplayTitle(tab: QueryTab, t: Translate): string {
     if (compact) return tab.sql;
     return `${tab.sql}@${database}`;
   }
+  if (tab.mode === "vector" && tab.sql) {
+    if (compact) return tab.sql;
+    return `${tab.sql}@${database}`;
+  }
   if (tab.mode === "redis") {
     if (compact) return connectionDisplayName(tab.connectionId);
     return `${connectionDisplayName(tab.connectionId)}@${database}`;
@@ -104,6 +108,9 @@ export function tabTooltipLines(tab: QueryTab, t: Translate): { label: string; v
     lines.push({ label: t("tabs.tooltipTable"), value: tab.tableMeta.tableName });
   }
   if (tab.mode === "mongo" && tab.sql) {
+    lines.push({ label: t("tabs.tooltipCollection"), value: tab.sql });
+  }
+  if (tab.mode === "vector" && tab.sql) {
     lines.push({ label: t("tabs.tooltipCollection"), value: tab.sql });
   }
   if (tab.mode === "objects" && tab.objectBrowser?.schema) {
@@ -171,6 +178,7 @@ export function tabModeLabel(tab: QueryTab, t: Translate): string {
   if (tab.mode === "data") return t("tabs.table");
   if (tab.mode === "query") return t("tabs.sql");
   if (tab.mode === "mongo") return t("tabs.mongo");
+  if (tab.mode === "vector") return t("tabs.vector");
   if (tab.mode === "redis") return t("tabs.redis");
   if (tab.mode === "etcd") return t("tabs.etcd");
   if (tab.mode === "objects") return t("tabs.objects");

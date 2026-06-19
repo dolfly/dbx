@@ -105,7 +105,8 @@ import { matchesRowStatusFilter, type RowStatus, type RowStatusFilter } from "@/
 import { displayCellValue, type CellValue } from "@/lib/cellValue";
 import { getApplicablePreviewActions } from "@/lib/resultPreviewRegistry";
 import "@/lib/previewHandlers/geometryMapPreview";
-import { BINARY_CELL_DOWNLOAD_MODES, binaryCellDisplayText, binaryCellDownloadFileName, binaryCellDownloadPayload, canDownloadBinaryCellValue, downloadBinaryCellPayload, type BinaryCellDownloadMode } from "@/lib/binaryCellDownload";
+import { BINARY_CELL_DOWNLOAD_MODES, binaryCellDisplayText, binaryCellDownloadFileName, binaryCellDownloadPayload, canDownloadBinaryCellValue, downloadBinaryCellPayload, isBinaryCellColumnType, parseBinaryCellBytes, type BinaryCellDownloadMode } from "@/lib/binaryCellDownload";
+import { buildBinaryHexViewRows } from "@/lib/binaryHexViewer";
 import { canFormatCellDetailJson, cellDetailEditorText, defaultCellDetailTab, formatJsonText, isGeometryColumnType, linkedCellDetailTarget, valueEditorActions, visibleCellDetailTabs, type CellDetailTab } from "@/lib/cellDetailPresentation";
 import { renderWktOnCanvas, isHexGeometry } from "@/lib/geometryPreview";
 import { buildDataGridCellDetail, buildDataGridColumnDetail, buildDataGridRowDetail, dataGridColumnDetailJson, dataGridColumnDetailTsv, dataGridRowDetailJson, dataGridRowDetailTsv, filterDataGridDetailFields, type DataGridCellDetail } from "@/lib/dataGridDetail";
@@ -196,7 +197,8 @@ const props = defineProps<{
   loading?: boolean;
   cacheKey?: string;
   onExecuteSql?: (sql: string) => Promise<void>;
-  fullExportResult?: () => Promise<QueryResult | undefined>;
+  fullExportResult?: (onProgress?: (info: { rowsExported: number; totalRows: number | null }) => void) => Promise<QueryResult | undefined>;
+  allExportResults?: Array<{ sheetName: string; result: QueryResult }>;
   customSaveHandler?: import("@/composables/useDataGridEditor").CustomSaveHandler;
 }>();
 
@@ -3133,7 +3135,26 @@ watch(dialogGeometryPreviewOpen, async (open) => {
 
 const activeCellDetailTabs = computed(() => {
   const detail = activeCellDetail.value;
-  return visibleCellDetailTabs({ isEditable: !!detail?.isEditable });
+  return visibleCellDetailTabs({
+    isEditable: !!detail?.isEditable,
+    hasBinaryHexViewer: isBinaryCellColumnType(detail?.type),
+  });
+});
+
+const activeBinaryHexBytes = computed(() => {
+  if (activeCellDetailTab.value !== "hexViewer") return null;
+  const detail = activeCellDetail.value;
+  return detail ? parseBinaryCellBytes(detail.value, detail.type) : null;
+});
+
+const activeBinaryHexRows = computed(() => (activeBinaryHexBytes.value ? buildBinaryHexViewRows(activeBinaryHexBytes.value) : []));
+const activeBinaryHexByteCount = computed(() => activeBinaryHexBytes.value?.length ?? 0);
+
+const activeCellDetailTabsGridClass = computed(() => {
+  const count = activeCellDetailTabs.value.length;
+  if (count >= 3) return "grid-cols-3";
+  if (count === 2) return "grid-cols-2";
+  return "grid-cols-1";
 });
 
 watch(activeCellDetailTabs, (tabs) => {
@@ -4272,10 +4293,16 @@ const {
   copySelectionSqlInList,
   copySelectedRowsTsv,
   exportCsv,
+  exportCurrentPageCsv,
   exportJson,
+  exportCurrentPageJson,
   exportMarkdown,
+  exportCurrentPageMarkdown,
   exportXlsx,
+  exportCurrentPageXlsx,
+  exportAllResultsXlsx,
   exportSql,
+  exportCurrentPageSql,
   copySql,
 } = useDataGridExport({
   columns: visibleColumns,
@@ -4299,6 +4326,7 @@ const {
   selectedRowIds,
   hasRowSelection,
   fullExportResult: props.fullExportResult,
+  allExportResults: computed(() => props.allExportResults),
   exportProgressDialog,
   exportProgressState,
 });
@@ -4310,13 +4338,10 @@ const pageSizeMenuItems = computed(() =>
   })),
 );
 
-const exportMenuItems = computed(() => [
-  { value: "csv", label: t("grid.exportCsv") },
-  { value: "xlsx", label: t("grid.exportXlsx") },
-  { value: "json", label: t("grid.exportJson") },
-  { value: "markdown", label: t("grid.exportMarkdown") },
-  { value: "sql", label: t("grid.exportSql") },
-  ...(isMultiRow.value
+const exportMenuItems = computed(() => {
+  const hasFullResultExport = !!props.fullExportResult;
+  const allResultItems = (props.allExportResults?.length ?? 0) > 1 ? [{ value: "all-results-xlsx", label: t("grid.exportAllResultsXlsx"), separatorBefore: true }] : [];
+  const selectedItems = isMultiRow.value
     ? [
         { value: "selected-csv", label: t("grid.exportSelectedRowsCsv"), separatorBefore: true },
         { value: "selected-xlsx", label: t("grid.exportSelectedRowsXlsx") },
@@ -4324,8 +4349,27 @@ const exportMenuItems = computed(() => [
         { value: "selected-markdown", label: t("grid.exportSelectedRowsMarkdown") },
         { value: "selected-sql", label: t("grid.exportSelectedRowsSql") },
       ]
-    : []),
-]);
+    : [];
+
+  if (!hasFullResultExport) {
+    return [{ value: "csv", label: t("grid.exportCsv") }, { value: "xlsx", label: t("grid.exportXlsx") }, { value: "json", label: t("grid.exportJson") }, { value: "markdown", label: t("grid.exportMarkdown") }, { value: "sql", label: t("grid.exportSql") }, ...allResultItems, ...selectedItems];
+  }
+
+  return [
+    { value: "page-csv", label: t("grid.exportCurrentPageCsv") },
+    { value: "page-xlsx", label: t("grid.exportCurrentPageXlsx") },
+    { value: "page-json", label: t("grid.exportCurrentPageJson") },
+    { value: "page-markdown", label: t("grid.exportCurrentPageMarkdown") },
+    { value: "page-sql", label: t("grid.exportCurrentPageSql") },
+    { value: "csv", label: t("grid.exportCurrentResultCsv"), separatorBefore: true },
+    { value: "xlsx", label: t("grid.exportCurrentResultXlsx") },
+    { value: "json", label: t("grid.exportCurrentResultJson") },
+    { value: "markdown", label: t("grid.exportCurrentResultMarkdown") },
+    { value: "sql", label: t("grid.exportCurrentResultSql") },
+    ...allResultItems,
+    ...selectedItems,
+  ];
+});
 
 function selectPageSizeMenuItem(value: string) {
   changePageSize(Number(value));
@@ -4333,8 +4377,14 @@ function selectPageSizeMenuItem(value: string) {
 
 function selectExportMenuItem(value: string) {
   const actions: Record<string, () => void> = {
+    "page-csv": exportCurrentPageCsv,
+    "page-xlsx": exportCurrentPageXlsx,
+    "page-json": exportCurrentPageJson,
+    "page-markdown": exportCurrentPageMarkdown,
+    "page-sql": exportCurrentPageSql,
     csv: exportCsv,
     xlsx: exportXlsx,
+    "all-results-xlsx": exportAllResultsXlsx,
     json: exportJson,
     markdown: exportMarkdown,
     sql: exportSql,
@@ -7436,8 +7486,11 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
 
             <Tabs v-model="activeCellDetailTab" class="flex-1 min-h-0 gap-0">
               <div class="shrink-0 border-b px-3 py-2">
-                <TabsList class="grid h-7 w-full p-0.5" :class="activeCellDetailTabs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
+                <TabsList class="grid h-7 w-full p-0.5" :class="activeCellDetailTabsGridClass">
                   <TabsTrigger value="details" class="h-6 text-xs">{{ t("grid.cellDetails") }}</TabsTrigger>
+                  <TabsTrigger v-if="activeCellDetailTabs.includes('hexViewer')" value="hexViewer" class="h-6 text-xs">
+                    {{ t("grid.hexViewer") }}
+                  </TabsTrigger>
                   <TabsTrigger v-if="activeCellDetailTabs.includes('valueEditor')" value="valueEditor" class="h-6 text-xs">
                     {{ t("grid.valueEditor") }}
                   </TabsTrigger>
@@ -7587,6 +7640,28 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                 </div>
               </TabsContent>
 
+              <TabsContent v-if="activeCellDetailTabs.includes('hexViewer')" value="hexViewer" class="m-0 min-h-0 flex-1 flex flex-col p-3 text-xs">
+                <div class="mb-2 min-w-0 shrink-0">
+                  <div class="font-medium">{{ t("grid.hexViewer") }}</div>
+                  <div class="text-[11px] text-muted-foreground">{{ t("grid.hexViewerByteCount", { count: activeBinaryHexByteCount }) }}</div>
+                </div>
+                <div class="min-h-0 flex-1 overflow-auto rounded border bg-muted/20 font-mono text-[11px]">
+                  <div class="sticky top-0 grid grid-cols-[5.5rem_minmax(24rem,1fr)_8rem] gap-3 border-b bg-muted px-2 py-1 font-semibold text-muted-foreground">
+                    <div>{{ t("grid.hexViewerOffset") }}</div>
+                    <div>{{ t("grid.hexViewerHex") }}</div>
+                    <div>{{ t("grid.hexViewerAscii") }}</div>
+                  </div>
+                  <div v-for="row in activeBinaryHexRows" :key="row.offset" class="grid grid-cols-[5.5rem_minmax(24rem,1fr)_8rem] gap-3 border-b border-border/50 px-2 py-1 last:border-b-0">
+                    <div class="select-all text-muted-foreground">{{ row.offset }}</div>
+                    <div class="select-all whitespace-pre">{{ row.hex }}</div>
+                    <div class="select-all whitespace-pre">{{ row.ascii }}</div>
+                  </div>
+                  <div v-if="activeBinaryHexRows.length === 0" class="px-2 py-6 text-center font-sans text-muted-foreground">
+                    {{ t("grid.hexViewerEmpty") }}
+                  </div>
+                </div>
+              </TabsContent>
+
               <TabsContent v-if="activeCellDetailTabs.includes('valueEditor')" value="valueEditor" class="m-0 min-h-0 flex-1 flex flex-col p-3 text-xs">
                 <div class="flex min-h-0 flex-1 flex-col">
                   <TemporalCellEditor v-if="detailTemporalEditorKind" v-model="detailEditValue" :kind="detailTemporalEditorKind" variant="inline" :commit-on-close="false" @cancel="cancelValueEditorEdit" @commit="commitValueEditorEdit" />
@@ -7713,10 +7788,11 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
           :items="exportMenuItems"
           :aria-label="t('grid.export')"
           :trigger-icon="Download"
-          trigger-class="inline-flex h-6 w-6 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+          :trigger-label="t('grid.export')"
+          trigger-class="inline-flex h-6 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-foreground/80 hover:bg-accent hover:text-accent-foreground"
           trigger-icon-class="h-3.5 w-3.5"
-          :show-trigger-label="false"
-          :show-chevron="false"
+          :show-trigger-label="true"
+          :show-chevron="true"
           :highlight-selected="false"
           check-position="none"
           align="end"

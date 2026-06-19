@@ -200,6 +200,7 @@ async fn main() {
         .route("/schema/schemas", get(routes::schema::list_schemas))
         .route("/schema/tables", get(routes::schema::list_tables))
         .route("/schema/objects", get(routes::schema::list_objects))
+        .route("/schema/object-statistics", get(routes::schema::list_object_statistics))
         .route("/schema/completion-objects", get(routes::schema::list_completion_objects))
         .route("/schema/object-source", get(routes::schema::get_object_source))
         .route("/schema/columns", get(routes::schema::list_columns))
@@ -372,6 +373,7 @@ async fn main() {
         .route("/export/database", post(routes::database_export::start_database_export))
         .route("/export/database/progress/{exportId}", get(routes::database_export::database_export_progress))
         .route("/export/database/cancel", post(routes::database_export::cancel_database_export))
+        .route("/export/database/download/{exportId}", get(routes::database_export::database_export_download))
         // Table export
         .route("/export/table", post(routes::table_export::start_table_export))
         .route("/export/table/progress/{exportId}", get(routes::table_export::table_export_progress))
@@ -397,7 +399,14 @@ async fn main() {
             "/app-settings/pinned-tree-node-ids",
             get(routes::app_settings::load_pinned_tree_node_ids).post(routes::app_settings::save_pinned_tree_node_ids),
         )
-        .route("/app-settings/config/decrypt", post(routes::app_settings::decrypt_config));
+        .route("/app-settings/config/decrypt", post(routes::app_settings::decrypt_config))
+        // Cloud sync
+        .route("/cloud-sync/webdav/test", post(routes::cloud_sync::webdav_sync_test))
+        .route("/cloud-sync/webdav/password-status", post(routes::cloud_sync::webdav_password_status))
+        .route("/cloud-sync/webdav/save-password", post(routes::cloud_sync::save_webdav_saved_password))
+        .route("/cloud-sync/webdav/forget-password", post(routes::cloud_sync::forget_webdav_saved_password))
+        .route("/cloud-sync/webdav/upload", post(routes::cloud_sync::webdav_sync_upload))
+        .route("/cloud-sync/webdav/download", post(routes::cloud_sync::webdav_sync_download));
 
     let api = add_mq_routes(api)
         .layer(middleware::from_fn_with_state(web_state.clone(), auth::auth_middleware))

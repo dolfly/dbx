@@ -206,7 +206,7 @@ pub fn default_idle_timeout_secs() -> u64 {
 }
 
 pub fn default_keepalive_interval_secs() -> u64 {
-    0
+    60
 }
 
 fn default_proxy_port() -> u16 {
@@ -254,6 +254,10 @@ pub enum DatabaseType {
     Oracle,
     #[serde(rename = "elasticsearch")]
     Elasticsearch,
+    #[serde(rename = "qdrant")]
+    Qdrant,
+    #[serde(rename = "milvus")]
+    Milvus,
     Doris,
     #[serde(rename = "starrocks")]
     StarRocks,
@@ -725,7 +729,7 @@ impl ConnectionConfig {
                 format!("mongodb://{host}:{port}{db_part}{suffix}")
             }
             DatabaseType::Oracle => format!("oracle://{host}:{port}{db_part}"),
-            DatabaseType::Elasticsearch => {
+            DatabaseType::Elasticsearch | DatabaseType::Qdrant | DatabaseType::Milvus => {
                 let scheme = if self.ssl { "https" } else { "http" };
                 format!("{scheme}://{host}:{port}")
             }
@@ -858,7 +862,7 @@ impl ConnectionConfig {
             DatabaseType::Oracle => {
                 format!("oracle://{}:{}@{host}:{port}{db_part}", username, password)
             }
-            DatabaseType::Elasticsearch => {
+            DatabaseType::Elasticsearch | DatabaseType::Qdrant | DatabaseType::Milvus => {
                 let scheme = if self.ssl { "https" } else { "http" };
                 format!("{scheme}://{host}:{port}")
             }

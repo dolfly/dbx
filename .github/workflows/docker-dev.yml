@@ -36,30 +36,48 @@ jobs:
           username: cnb
           password: ${{ secrets.CNB_TOKEN }}
 
-      - name: Build and push by digest
-        id: build
+      - name: Build and push Docker Hub by digest
+        id: build-dockerhub
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/Dockerfile
           platforms: ${{ matrix.platform }}
-          outputs: |
-            type=image,name=${{ secrets.DOCKERHUB_USERNAME }}/dbx,push-by-digest=true,name-canonical=true,push=true
-            type=image,name=${{ env.CNB_REGISTRY }}/${{ env.CNB_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ secrets.DOCKERHUB_USERNAME }}/dbx,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}-dev
           cache-to: type=gha,scope=${{ matrix.platform }}-dev,mode=max
 
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+      - name: Build and push CNB by digest
+        id: build-cnb
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.CNB_REGISTRY }}/${{ env.CNB_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform }}-dev
 
-      - name: Upload digest
+      - name: Export digests
+        run: |
+          mkdir -p /tmp/digests/dockerhub /tmp/digests/cnb
+          dockerhub_digest="${{ steps.build-dockerhub.outputs.digest }}"
+          cnb_digest="${{ steps.build-cnb.outputs.digest }}"
+          touch "/tmp/digests/dockerhub/${dockerhub_digest#sha256:}"
+          touch "/tmp/digests/cnb/${cnb_digest#sha256:}"
+
+      - name: Upload Docker Hub digest
         uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-          path: /tmp/digests/*
+          name: dockerhub-digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/dockerhub/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload CNB digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: cnb-digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/cnb/*
           if-no-files-found: error
           retention-days: 1
 
@@ -67,11 +85,18 @@ jobs:
     needs: docker
     runs-on: ubuntu-latest
     steps:
-      - name: Download digests
+      - name: Download Docker Hub digests
         uses: actions/download-artifact@v8
         with:
-          path: /tmp/digests
-          pattern: digests-*
+          path: /tmp/digests/dockerhub
+          pattern: dockerhub-digests-*
+          merge-multiple: true
+
+      - name: Download CNB digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests/cnb
+          pattern: cnb-digests-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -91,12 +116,11 @@ jobs:
           password: ${{ secrets.CNB_TOKEN }}
 
       - name: Create manifest list and push
-        working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/dbx:dev \
-            $(printf '${{ secrets.DOCKERHUB_USERNAME }}/dbx@sha256:%s ' *)
+            $(cd /tmp/digests/dockerhub && printf '${{ secrets.DOCKERHUB_USERNAME }}/dbx@sha256:%s ' *)
 
           docker buildx imagetools create \
             -t ${{ env.CNB_REGISTRY }}/${{ env.CNB_REPOSITORY }}:dev \
-            $(printf '${{ env.CNB_REGISTRY }}/${{ env.CNB_REPOSITORY }}@sha256:%s ' *)
+            $(cd /tmp/digests/cnb && printf '${{ env.CNB_REGISTRY }}/${{ env.CNB_REPOSITORY }}@sha256:%s ' *)
