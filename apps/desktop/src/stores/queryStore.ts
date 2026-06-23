@@ -1260,6 +1260,8 @@ export const useQueryStore = defineStore("query", () => {
       preserveResultDuringExecution?: boolean;
       preserveTotalRowCountDuringExecution?: boolean;
       skipRedisSafetyCheck?: boolean;
+      sourceTraceId?: string;
+      skipEnsureConnected?: boolean;
     },
   ) {
     const tab = tabs.value.find((t) => t.id === id);
@@ -1295,6 +1297,7 @@ export const useQueryStore = defineStore("query", () => {
       connectionId: tab.connectionId,
       database: tab.database,
       schema: tab.schema,
+      sourceTraceId: options?.sourceTraceId,
       sql,
     });
     const queryBaseSql = options?.resultBaseSql ?? sql;
@@ -1306,9 +1309,13 @@ export const useQueryStore = defineStore("query", () => {
     let useAgentResultSession = false;
     try {
       const connStore = useConnectionStore();
-      console.info("[DBX][executeTabSql:ensure-connected:start]", { traceId, elapsed: elapsed() });
-      await connStore.ensureConnected(tab.connectionId);
-      console.info("[DBX][executeTabSql:ensure-connected:done]", { traceId, elapsed: elapsed() });
+      if (options?.skipEnsureConnected) {
+        console.info("[DBX][executeTabSql:ensure-connected:skip]", { traceId, elapsed: elapsed(), reason: "caller" });
+      } else {
+        console.info("[DBX][executeTabSql:ensure-connected:start]", { traceId, elapsed: elapsed() });
+        await connStore.ensureConnected(tab.connectionId);
+        console.info("[DBX][executeTabSql:ensure-connected:done]", { traceId, elapsed: elapsed() });
+      }
       const conn = connStore.getConfig(tab.connectionId);
       const effectiveDbType = effectiveDatabaseTypeForConnection(conn);
       const useAgentCursor = conn?.db_type === "jdbc" || supportsDatabaseFeature(conn?.db_type, "driverManagement");
@@ -1586,7 +1593,7 @@ export const useQueryStore = defineStore("query", () => {
       }
 
       console.info("[DBX][executeTabSql:execute-multi:start]", { traceId, elapsed: elapsed() });
-      const clientSessionId = tab.mode === "query" || tab.mode === "data" ? tabClientSessionId(tab) : undefined;
+      const clientSessionId = tab.mode === "query" ? tabClientSessionId(tab) : undefined;
       const executionOptions = {
         ...(typeof pageLimit === "number"
           ? useAgentResultSession
@@ -1606,6 +1613,7 @@ export const useQueryStore = defineStore("query", () => {
         elapsed: elapsed(),
         executionSchema,
         optionKeys: Object.keys(executionOptions),
+        clientSession: Boolean(clientSessionId),
       });
       const executionPromise = api.executeMulti(tab.connectionId, tab.database, sqlToExecute, executionSchema, executionId, executionOptions);
       const frontendTimeoutSecs = Math.max(queryTimeoutSecs * 2, 60);
@@ -2032,7 +2040,6 @@ export const useQueryStore = defineStore("query", () => {
       const pageLimit = TABLE_DATA_EXPORT_PAGE_SIZE;
       const effectiveDbType = effectiveDatabaseTypeForConnection(conn);
       const primaryKeys = tab.tableMeta ? editablePrimaryKeys(effectiveDbType, tab.tableMeta.columns, tab.tableMeta.tableType) : tableMeta.primaryKeys;
-      const fallbackOrderColumns = effectiveDbType === "sqlserver" && !primaryKeys.length ? tableMeta.columns.slice(0, 1).map((column) => column.name) : undefined;
       const sortOrder = tab.resultSortColumn && tab.resultSortDirection ? `${quoteTableIdentifier(effectiveDbType, tab.resultSortColumn)} ${tab.resultSortDirection.toUpperCase()}` : undefined;
       const orderBy = tab.orderByInput?.trim() || sortOrder;
       const queryTimeoutSecs = queryTimeoutSecsForConnection(conn);
@@ -2051,7 +2058,6 @@ export const useQueryStore = defineStore("query", () => {
             tableName: tableMeta.tableName,
             columns: tableMeta.columns.map((column) => column.name),
             primaryKeys,
-            fallbackOrderColumns,
             whereInput: tab.whereInput,
             orderBy,
             limit: pageLimit,

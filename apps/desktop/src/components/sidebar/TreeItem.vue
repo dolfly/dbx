@@ -144,6 +144,7 @@ const { highlight } = useSqlHighlighter();
 
 type StructureCopyFormat = "tsv" | "markdown";
 type DuplicateStructureSource = TreeNode & { connectionId: string; database: string };
+const DATA_TAB_METADATA_TTL_MS = 30_000;
 const { getDatabaseOptions } = useDatabaseOptions();
 const showVisibleDatabasesDialog = ref(false);
 const { addTask: addExportTask } = useExportTracker();
@@ -834,7 +835,19 @@ async function openData() {
   const config = connectionStore.getConfig(node.connectionId);
   const traceId = uuid().slice(0, 8);
   const startedAt = performance.now();
+  let lastPhaseAt = startedAt;
   const elapsed = () => `${Math.round(performance.now() - startedAt)}ms`;
+  const logPhase = (phase: string, extra: Record<string, unknown> = {}) => {
+    const now = performance.now();
+    console.info("[DBX][openData:phase]", {
+      traceId,
+      phase,
+      deltaMs: Math.round(now - lastPhaseAt),
+      totalMs: Math.round(now - startedAt),
+      ...extra,
+    });
+    lastPhaseAt = now;
+  };
   console.info("[DBX][openData:start]", {
     traceId,
     type: node.type,
@@ -845,6 +858,7 @@ async function openData() {
     dbType: config?.db_type,
   });
   const tableSchema = connectionObjectTreeNodeSchema(config, node.database, node.schema);
+  const tableType = node.type === "view" ? "VIEW" : node.type === "materialized_view" ? "MATERIALIZED_VIEW" : "TABLE";
   const tabId = (() => {
     if (settingsStore.editorSettings.reuseDataTab) {
       const existing = queryStore.tabs.find((tab) => tab.mode === "data" && tab.connectionId === node.connectionId && tab.database === node.database);
@@ -858,11 +872,13 @@ async function openData() {
     return queryStore.createTab(node.connectionId, node.database, node.label, "data", tableSchema);
   })();
   console.info("[DBX][openData:tab-created]", { traceId, tabId, elapsed: elapsed() });
+  logPhase("tab-created", { tabId });
 
   // Cancel any previous execution on this tab before starting a new one
   const existingTab = queryStore.tabs.find((t) => t.id === tabId);
   if (existingTab?.isExecuting && existingTab.executionId) {
     await queryStore.cancelTabExecution(tabId);
+    logPhase("previous-execution-cancelled", { tabId });
   }
 
   const openDataId = uuid();
@@ -872,70 +888,112 @@ async function openData() {
     tab.result = undefined;
     tab.results = undefined;
   }
-  queryStore.setTableMeta(tabId, {
-    schema: tableSchema,
-    tableName: node.label,
-    tableType: node.type === "view" ? "VIEW" : node.type === "materialized_view" ? "MATERIALIZED_VIEW" : "TABLE",
-    columns: [],
-    primaryKeys: [],
-  });
+  const existingTableMeta = tab?.tableMeta;
+  const existingTableMetaAgeMs = tab?.tableMetaUpdatedAt ? Date.now() - tab.tableMetaUpdatedAt : Number.POSITIVE_INFINITY;
+  const cachedTableMeta = existingTableMeta?.tableName === node.label && existingTableMeta.schema === tableSchema && existingTableMeta.tableType === tableType && existingTableMeta.columns.length > 0 && existingTableMetaAgeMs < DATA_TAB_METADATA_TTL_MS ? existingTableMeta : undefined;
+  queryStore.setTableMeta(
+    tabId,
+    cachedTableMeta ?? {
+      schema: tableSchema,
+      tableName: node.label,
+      tableType,
+      columns: [],
+      primaryKeys: [],
+    },
+  );
   queryStore.setExecutingWithId(tabId, openDataId);
+  logPhase("state-prepared", { tabId });
 
   // Helper to check if this openData call is still active (not superseded by a newer click)
   const isActive = () => queryStore.tabs.find((t) => t.id === tabId)?.executionId === openDataId;
+  const isCurrentDataTab = () => {
+    const current = queryStore.tabs.find((t) => t.id === tabId);
+    return current?.mode === "data" && current.connectionId === node.connectionId && current.database === node.database && current.schema === tableSchema && current.title === node.label;
+  };
 
   try {
     console.info("[DBX][openData:ensure-connected:start]", { traceId, elapsed: elapsed() });
     await connectionStore.ensureConnected(node.connectionId);
-    if (!isActive()) return;
+    if (!isActive()) {
+      logPhase("superseded-after-ensure-connected", { tabId });
+      return;
+    }
     console.info("[DBX][openData:ensure-connected:done]", { traceId, elapsed: elapsed() });
+    logPhase("ensure-connected", { tabId });
     if (!config) throw new Error("Connection config not found");
 
     const querySchema = connectionObjectTreeQuerySchema(config, node.database, tableSchema);
     const effectiveDbType = effectiveDatabaseTypeForConnection(config);
     const limit = settingsStore.editorSettings.pageSize;
-    let columns: ColumnInfo[] = [];
-    let primaryKeys: string[] = [];
-    try {
-      console.info("[DBX][openData:get-columns:start]", {
+    const refreshTableMetaInBackground = async () => {
+      const metadataStartedAt = performance.now();
+      console.info("[DBX][openData:metadata:start]", {
         traceId,
         database: node.database,
         schema: querySchema,
         table: node.label,
         elapsed: elapsed(),
       });
-      columns = await api.getColumns(node.connectionId, node.database, querySchema, node.label);
-      if (!isActive()) return;
-      primaryKeys = editablePrimaryKeys(effectiveDbType, columns, node.type === "view" ? "VIEW" : node.type === "materialized_view" ? "MATERIALIZED_VIEW" : "TABLE");
-      console.info("[DBX][openData:get-columns:done]", {
+      try {
+        const nextColumns = await api.getColumns(node.connectionId, node.database, querySchema, node.label);
+        if (!isCurrentDataTab()) {
+          console.info("[DBX][openData:metadata:stale]", {
+            traceId,
+            tabId,
+            columnCount: nextColumns.length,
+            elapsed: elapsed(),
+          });
+          return;
+        }
+        const nextPrimaryKeys = editablePrimaryKeys(effectiveDbType, nextColumns, tableType);
+        queryStore.setTableMeta(tabId, {
+          schema: tableSchema,
+          tableName: node.label,
+          tableType,
+          columns: nextColumns,
+          primaryKeys: nextPrimaryKeys,
+        });
+        console.info("[DBX][openData:metadata:done]", {
+          traceId,
+          tabId,
+          columnCount: nextColumns.length,
+          primaryKeyCount: nextPrimaryKeys.length,
+          elapsed: elapsed(),
+          metadataMs: Math.round(performance.now() - metadataStartedAt),
+        });
+      } catch (error) {
+        console.warn("[DBX][openData:metadata:error]", { traceId, tabId, elapsed: elapsed(), error });
+      }
+    };
+    if (cachedTableMeta) {
+      console.info("[DBX][openData:metadata:cache-hit]", {
         traceId,
-        columnCount: columns.length,
-        primaryKeys,
+        tabId,
+        columnCount: cachedTableMeta.columns.length,
+        primaryKeyCount: cachedTableMeta.primaryKeys.length,
+        ageMs: Math.round(existingTableMetaAgeMs),
         elapsed: elapsed(),
       });
-      queryStore.setTableMeta(tabId, {
-        schema: tableSchema,
-        tableName: node.label,
-        tableType: node.type === "view" ? "VIEW" : node.type === "materialized_view" ? "MATERIALIZED_VIEW" : "TABLE",
-        columns,
-        primaryKeys,
-      });
-    } catch (error) {
-      console.warn("[DBX][openData:get-columns:error]", { traceId, elapsed: elapsed(), error });
+    } else {
+      void refreshTableMetaInBackground();
+      logPhase("metadata-started", { tabId });
     }
 
     // Check if superseded by a newer openData call
-    if (!isActive()) return;
+    if (!isActive()) {
+      logPhase("superseded-before-build-sql", { tabId });
+      return;
+    }
 
+    const columns = cachedTableMeta?.columns ?? [];
+    const primaryKeys = cachedTableMeta?.primaryKeys ?? [];
     const includeRowId = usesSyntheticRowIdKey(effectiveDbType, primaryKeys);
-    const fallbackOrderColumns = effectiveDbType === "sqlserver" && !primaryKeys.length ? columns.slice(0, 1).map((column) => column.name) : undefined;
     const sql = await buildTableSelectSql({
       databaseType: effectiveDbType,
       schema: tableSchema,
       tableName: node.label,
       columns: columns.map((column) => column.name),
       primaryKeys,
-      fallbackOrderColumns,
       limit,
       includeRowId,
     });
@@ -946,14 +1004,21 @@ async function openData() {
       sql,
       elapsed: elapsed(),
     });
+    logPhase("sql-built", { tabId, columnCount: columns.length, primaryKeyCount: primaryKeys.length });
     queryStore.updateSql(tabId, sql);
+    logPhase("sql-updated", { tabId });
 
     console.info("[DBX][openData:execute:start]", { traceId, tabId, elapsed: elapsed() });
-    await queryStore.executeTabSql(tabId, sql);
+    await queryStore.executeTabSql(tabId, sql, { sourceTraceId: traceId, skipEnsureConnected: true });
     console.info("[DBX][openData:execute:done]", { traceId, tabId, elapsed: elapsed() });
+    logPhase("execute-tab-sql", { tabId });
   } catch (e: any) {
-    if (!isActive()) return;
+    if (!isActive()) {
+      logPhase("superseded-after-error", { tabId });
+      return;
+    }
     console.error("[DBX][openData:error]", { traceId, elapsed: elapsed(), error: e });
+    logPhase("error", { tabId });
     queryStore.setErrorResult(tabId, e);
   }
 }

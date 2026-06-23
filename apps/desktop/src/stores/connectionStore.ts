@@ -55,6 +55,7 @@ import { completionSchemasFromTree, completionTablesFromTree } from "@/lib/compl
 
 const PINNED_TREE_NODES_STORAGE_KEY = "dbx-pinned-tree-nodes";
 const ACTIVE_CONNECTION_STORAGE_KEY = "dbx-active-connection";
+const CONNECTION_HEALTH_CHECK_TTL_MS = 2000;
 function sidebarObjectGroupPageSize(): number {
   const settingsStore = useSettingsStore();
   const size = settingsStore.desktopSettings.sidebar_table_page_size;
@@ -146,6 +147,7 @@ export const useConnectionStore = defineStore("connection", () => {
   const treeNodes = ref<TreeNode[]>([]);
   const pinnedTreeNodeIds = ref<Set<string>>(new Set());
   const connectedIds = ref<Set<string>>(new Set());
+  const lastConnectionHealthCheckAt = ref<Record<string, number>>({});
   const loadedTreeNodeChildrenIds = ref<Set<string>>(new Set());
   const connectionErrors = ref<Record<string, string>>({});
   const editingConnectionId = ref<string | null>(null);
@@ -255,6 +257,20 @@ export const useConnectionStore = defineStore("connection", () => {
     delete connectionErrors.value[connectionId];
   }
 
+  function markConnectionHealthChecked(connectionId: string) {
+    lastConnectionHealthCheckAt.value[connectionId] = Date.now();
+  }
+
+  function clearConnectionHealthCheck(connectionId: string) {
+    if (!lastConnectionHealthCheckAt.value[connectionId]) return;
+    delete lastConnectionHealthCheckAt.value[connectionId];
+  }
+
+  function hasRecentConnectionHealthCheck(connectionId: string) {
+    const checkedAt = lastConnectionHealthCheckAt.value[connectionId];
+    return typeof checkedAt === "number" && Date.now() - checkedAt < CONNECTION_HEALTH_CHECK_TTL_MS;
+  }
+
   function recordConnectionError(connectionId: string, error: unknown): string {
     const message = connectionErrorMessage(error);
     setConnectionError(connectionId, message);
@@ -263,6 +279,7 @@ export const useConnectionStore = defineStore("connection", () => {
 
   function markConnectionLost(connectionId: string, error: unknown) {
     connectedIds.value.delete(connectionId);
+    clearConnectionHealthCheck(connectionId);
     if (activeConnectionId.value === connectionId) activeConnectionId.value = null;
     recordConnectionError(connectionId, error);
   }
@@ -733,6 +750,7 @@ export const useConnectionStore = defineStore("connection", () => {
     for (const id of removedIds) {
       clearConnectionError(id);
       connectedIds.value.delete(id);
+      clearConnectionHealthCheck(id);
       sidebarLayout.value = removeConnectionFromSidebarLayout(sidebarLayout.value, id);
     }
     rebuildTreeNodes();
@@ -763,6 +781,7 @@ export const useConnectionStore = defineStore("connection", () => {
     connections.value = nextConnections;
     rebuildTreeNodes();
     connectedIds.value.delete(config.id);
+    clearConnectionHealthCheck(config.id);
     invalidateCompletionCache(config.id);
     clearLoadedChildrenCache(config.id);
     const node = findNode(treeNodes.value, config.id);
@@ -851,6 +870,7 @@ export const useConnectionStore = defineStore("connection", () => {
       const id = await withConnectionAttemptTimeout(api.connectDb(config), config);
       activeConnectionId.value = id;
       connectedIds.value.add(id);
+      markConnectionHealthChecked(id);
       clearConnectionError(config.id);
       if (id !== config.id) clearConnectionError(id);
 
@@ -897,6 +917,7 @@ export const useConnectionStore = defineStore("connection", () => {
         break;
     }
     connectedIds.value.delete(connectionId);
+    clearConnectionHealthCheck(connectionId);
     const node = findNode(treeNodes.value, connectionId);
     if (node) {
       node.isExpanded = false;
@@ -937,13 +958,16 @@ export const useConnectionStore = defineStore("connection", () => {
 
   async function ensureConnected(connectionId: string) {
     if (connectedIds.value.has(connectionId)) {
+      if (hasRecentConnectionHealthCheck(connectionId)) return;
       // Optimistic: verify backend pool is actually healthy
       try {
         await api.checkConnectionHealth(connectionId);
+        markConnectionHealthChecked(connectionId);
         return;
       } catch {
         // Backend pool is dead — remove from connectedIds and reconnect
         connectedIds.value.delete(connectionId);
+        clearConnectionHealthCheck(connectionId);
         if (activeConnectionId.value === connectionId) activeConnectionId.value = null;
       }
     }
@@ -961,6 +985,7 @@ export const useConnectionStore = defineStore("connection", () => {
       await beforeConnectHandler?.(config);
       await withConnectionAttemptTimeout(api.connectDb(config), config);
       connectedIds.value.add(connectionId);
+      markConnectionHealthChecked(connectionId);
       activeConnectionId.value = connectionId;
       clearConnectionError(connectionId);
     } catch (e) {
@@ -3080,6 +3105,7 @@ export const useConnectionStore = defineStore("connection", () => {
       connections.value.push(normalized);
     }
     connectedIds.value.add(normalized.id);
+    markConnectionHealthChecked(normalized.id);
     clearConnectionError(normalized.id);
   }
 

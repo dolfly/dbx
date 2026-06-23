@@ -34,7 +34,6 @@ export function useDataGridActions(activeTab: ComputedRef<QueryTab | undefined>)
     if (tab.tableMeta && primaryKeys.join("\0") !== tab.tableMeta.primaryKeys.join("\0")) {
       tab.tableMeta.primaryKeys = primaryKeys;
     }
-    const fallbackOrderColumns = effectiveDbType === "sqlserver" && !primaryKeys.length ? tableMeta?.columns.slice(0, 1).map((column) => column.name) : undefined;
     const useRowId = usesSyntheticRowIdKey(effectiveDbType, primaryKeys);
     return buildTableSelectSql({
       databaseType: effectiveDbType,
@@ -42,7 +41,6 @@ export function useDataGridActions(activeTab: ComputedRef<QueryTab | undefined>)
       tableName: tableMeta?.tableName ?? "",
       columns: tableMeta?.columns.map((column) => column.name),
       primaryKeys,
-      fallbackOrderColumns,
       includeRowId: useRowId,
       limit: options.limit ?? settingsStore.editorSettings.pageSize,
       ...options,
