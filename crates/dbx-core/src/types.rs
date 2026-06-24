@@ -46,6 +46,7 @@ pub struct ObjectStatistics {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ObjectSourceKind {
     View,
+    MaterializedView,
     Procedure,
     Function,
     Sequence,

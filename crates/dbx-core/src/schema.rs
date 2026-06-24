@@ -2662,7 +2662,7 @@ fn mysql_ident(value: &str) -> String {
 
 fn sqlite_object_type(kind: &db::ObjectSourceKind) -> &'static str {
     match kind {
-        db::ObjectSourceKind::View => "view",
+        db::ObjectSourceKind::View | db::ObjectSourceKind::MaterializedView => "view",
         db::ObjectSourceKind::Procedure
         | db::ObjectSourceKind::Function
         | db::ObjectSourceKind::Sequence
@@ -2676,7 +2676,10 @@ fn sqlserver_object_type_filter(kind: &db::ObjectSourceKind) -> &'static str {
         db::ObjectSourceKind::View => "'V'",
         db::ObjectSourceKind::Procedure => "'P'",
         db::ObjectSourceKind::Function => "'FN','IF','TF','FS','FT'",
-        db::ObjectSourceKind::Sequence | db::ObjectSourceKind::Package | db::ObjectSourceKind::PackageBody => "''",
+        db::ObjectSourceKind::Sequence
+        | db::ObjectSourceKind::Package
+        | db::ObjectSourceKind::PackageBody
+        | db::ObjectSourceKind::MaterializedView => "''",
     }
 }
 
@@ -2694,7 +2697,7 @@ pub fn sqlserver_object_source_sql(schema: &str, name: &str, kind: &db::ObjectSo
 
 pub fn postgres_object_source_sql(schema: &str, name: &str, kind: &db::ObjectSourceKind) -> String {
     match kind {
-        db::ObjectSourceKind::View => {
+        db::ObjectSourceKind::View | db::ObjectSourceKind::MaterializedView => {
             format!(
                 "SELECT pg_get_viewdef(c.oid, 0) \
                  FROM pg_catalog.pg_class c \
@@ -2749,6 +2752,7 @@ pub fn postgres_object_source_sql(schema: &str, name: &str, kind: &db::ObjectSou
 pub fn oracle_object_source_sql(schema: &str, name: &str, kind: &db::ObjectSourceKind) -> String {
     let object_type = match kind {
         db::ObjectSourceKind::View => "VIEW",
+        db::ObjectSourceKind::MaterializedView => "MATERIALIZED_VIEW",
         db::ObjectSourceKind::Procedure => "PROCEDURE",
         db::ObjectSourceKind::Function => "FUNCTION",
         db::ObjectSourceKind::Sequence => "SEQUENCE",
@@ -2780,9 +2784,10 @@ pub fn mysql_object_source_sql(name: &str, kind: &db::ObjectSourceKind) -> Strin
         db::ObjectSourceKind::View => format!("SHOW CREATE VIEW {}", mysql_ident(name)),
         db::ObjectSourceKind::Procedure => format!("SHOW CREATE PROCEDURE {}", mysql_ident(name)),
         db::ObjectSourceKind::Function => format!("SHOW CREATE FUNCTION {}", mysql_ident(name)),
-        db::ObjectSourceKind::Sequence | db::ObjectSourceKind::Package | db::ObjectSourceKind::PackageBody => {
-            String::new()
-        }
+        db::ObjectSourceKind::Sequence
+        | db::ObjectSourceKind::Package
+        | db::ObjectSourceKind::PackageBody
+        | db::ObjectSourceKind::MaterializedView => String::new(),
     }
 }
 
