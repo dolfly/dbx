@@ -14,13 +14,11 @@ async fn live_sqlserver_completion_assistant_searches_metadata_before_limiting()
             .expect("connect SQL Server");
 
     let suffix = uuid::Uuid::new_v4().simple().to_string();
-    let schema = format!("dbx_completion_{suffix}");
+    let schema = "dbo".to_string();
     let prefix = format!("needle_{suffix}");
     let table = format!("{prefix}_table");
-    let setup = format!(
-        "CREATE SCHEMA [{schema}]; CREATE TABLE [{schema}].[{table}] (id INT NOT NULL, display_name NVARCHAR(64) NULL);"
-    );
-    dbx_core::db::sqlserver::execute_query(&mut client, &setup).await.expect("create live test objects");
+    let setup = format!("CREATE TABLE [{schema}].[{table}] (id INT NOT NULL, display_name NVARCHAR(64) NULL);");
+    dbx_core::db::sqlserver::execute_batch(&mut client, &setup).await.expect("create live test objects");
 
     let request = dbx_core::types::CompletionAssistantRequest {
         connection_id: "live-sqlserver".to_string(),
@@ -62,6 +60,6 @@ async fn live_sqlserver_completion_assistant_searches_metadata_before_limiting()
         .iter()
         .any(|candidate| candidate.name == "display_name" && candidate.parent_name.as_deref() == Some(table.as_str())));
 
-    let cleanup = format!("DROP TABLE [{schema}].[{table}]; DROP SCHEMA [{schema}];");
-    let _ = dbx_core::db::sqlserver::execute_query(&mut client, &cleanup).await;
+    let cleanup = format!("DROP TABLE [{schema}].[{table}];");
+    let _ = dbx_core::db::sqlserver::execute_batch(&mut client, &cleanup).await;
 }

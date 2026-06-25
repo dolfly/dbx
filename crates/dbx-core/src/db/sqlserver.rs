@@ -927,7 +927,7 @@ fn sqlserver_completion_assistant_sql(request: &crate::types::CompletionAssistan
     {
         let object_like = sqlserver_completion_object_search_clause(request, &like_pattern);
         queries.push(format!(
-            "SELECT TOP ({limit}) o.name, s.name AS schema_name, 'TABLE' AS object_type, NULL AS parent_schema, NULL AS parent_name, NULL AS object_comment, NULL AS data_type \
+            "SELECT TOP ({limit}) o.name, s.name AS schema_name, 'TABLE' AS object_type, CAST(NULL AS NVARCHAR(128)) AS parent_schema, CAST(NULL AS NVARCHAR(128)) AS parent_name, CAST(NULL AS NVARCHAR(MAX)) AS object_comment, CAST(NULL AS NVARCHAR(128)) AS data_type \
              FROM tempdb.sys.all_objects o \
              JOIN tempdb.sys.schemas s ON s.schema_id = o.schema_id \
              WHERE o.type = 'U' {object_like}"
@@ -937,7 +937,7 @@ fn sqlserver_completion_assistant_sql(request: &crate::types::CompletionAssistan
     if object_kinds.iter().any(|kind| matches!(kind, crate::types::CompletionAssistantObjectKind::Schema)) {
         let schema_like = like_clause.replace("name_expr", "s.name");
         queries.push(format!(
-            "SELECT TOP ({limit}) s.name, s.name AS schema_name, 'SCHEMA' AS object_type, NULL AS parent_schema, NULL AS parent_name, NULL AS object_comment, NULL AS data_type \
+            "SELECT TOP ({limit}) s.name, s.name AS schema_name, 'SCHEMA' AS object_type, CAST(NULL AS NVARCHAR(128)) AS parent_schema, CAST(NULL AS NVARCHAR(128)) AS parent_name, CAST(NULL AS NVARCHAR(MAX)) AS object_comment, CAST(NULL AS NVARCHAR(128)) AS data_type \
              FROM sys.schemas s \
              WHERE s.name NOT IN ('guest','INFORMATION_SCHEMA','sys') {schema_like}"
         ));
@@ -974,7 +974,7 @@ fn sqlserver_completion_assistant_sql(request: &crate::types::CompletionAssistan
         queries.push(format!(
             "SELECT TOP ({limit}) o.name, s.name AS schema_name, \
              CASE o.type WHEN 'U' THEN 'TABLE' WHEN 'V' THEN 'VIEW' WHEN 'P' THEN 'PROCEDURE' WHEN 'FN' THEN 'FUNCTION' WHEN 'IF' THEN 'FUNCTION' WHEN 'TF' THEN 'FUNCTION' WHEN 'FS' THEN 'FUNCTION' WHEN 'FT' THEN 'FUNCTION' ELSE o.type_desc END AS object_type, \
-             NULL AS parent_schema, NULL AS parent_name, ep.value AS object_comment, NULL AS data_type \
+             CAST(NULL AS NVARCHAR(128)) AS parent_schema, CAST(NULL AS NVARCHAR(128)) AS parent_name, ep.value AS object_comment, CAST(NULL AS NVARCHAR(128)) AS data_type \
              FROM sys.objects o \
              JOIN sys.schemas s ON s.schema_id = o.schema_id \
              OUTER APPLY (SELECT CAST(ep.value AS NVARCHAR(MAX)) AS value FROM sys.extended_properties ep WHERE ep.major_id = o.object_id AND ep.minor_id = 0 AND ep.name = N'MS_Description') ep \
@@ -991,7 +991,7 @@ fn sqlserver_completion_assistant_sql(request: &crate::types::CompletionAssistan
             .map(|table| format!(" AND o.name = '{}' ", table.replace('\'', "''")))
             .unwrap_or_default();
         queries.push(format!(
-            "SELECT TOP ({limit}) c.name, s.name AS schema_name, 'COLUMN' AS object_type, s.name AS parent_schema, o.name AS parent_name, NULL AS object_comment, TYPE_NAME(c.user_type_id) AS data_type \
+            "SELECT TOP ({limit}) c.name, s.name AS schema_name, 'COLUMN' AS object_type, s.name AS parent_schema, o.name AS parent_name, CAST(NULL AS NVARCHAR(MAX)) AS object_comment, TYPE_NAME(c.user_type_id) AS data_type \
              FROM sys.columns c \
              JOIN sys.objects o ON o.object_id = c.object_id \
              JOIN sys.schemas s ON s.schema_id = o.schema_id \
@@ -1000,7 +1000,7 @@ fn sqlserver_completion_assistant_sql(request: &crate::types::CompletionAssistan
     }
 
     if queries.is_empty() {
-        format!("SELECT TOP (0) '' AS name, '' AS schema_name, '' AS object_type, NULL AS parent_schema, NULL AS parent_name, NULL AS object_comment, NULL AS data_type")
+        format!("SELECT TOP (0) CAST('' AS NVARCHAR(128)) AS name, CAST('' AS NVARCHAR(128)) AS schema_name, CAST('' AS NVARCHAR(60)) AS object_type, CAST(NULL AS NVARCHAR(128)) AS parent_schema, CAST(NULL AS NVARCHAR(128)) AS parent_name, CAST(NULL AS NVARCHAR(MAX)) AS object_comment, CAST(NULL AS NVARCHAR(128)) AS data_type")
     } else if queries.len() == 1 {
         format!("SELECT * FROM ({}) AS dbx_completion ORDER BY name", queries.remove(0))
     } else {
@@ -1792,6 +1792,9 @@ mod tests {
         assert!(sql.contains("o.type IN ('U','V')"));
         assert!(sql.contains("s.name = 'dbo'"));
         assert!(sql.contains("LOWER(o.name) LIKE LOWER('Temp%') ESCAPE '\\'"));
+        assert!(sql.contains("CAST(NULL AS NVARCHAR(128)) AS parent_schema"));
+        assert!(sql.contains("CAST(NULL AS NVARCHAR(128)) AS parent_name"));
+        assert!(sql.contains("CAST(NULL AS NVARCHAR(128)) AS data_type"));
     }
 
     #[test]
@@ -1817,6 +1820,7 @@ mod tests {
         assert!(sql.contains("FROM sys.columns c"));
         assert!(sql.contains("o.name = 'Users'"));
         assert!(sql.contains("LOWER(c.name) LIKE LOWER('%id%') ESCAPE '\\'"));
+        assert!(sql.contains("CAST(NULL AS NVARCHAR(MAX)) AS object_comment"));
     }
 
     #[test]
@@ -1842,6 +1846,8 @@ mod tests {
         assert!(sql.contains("FROM tempdb.sys.all_objects o"));
         assert!(sql.contains("o.type = 'U'"));
         assert!(sql.contains("LOWER(o.name) LIKE LOWER('#Temp%') ESCAPE '\\'"));
+        assert!(sql.contains("CAST(NULL AS NVARCHAR(128)) AS parent_schema"));
+        assert!(sql.contains("CAST(NULL AS NVARCHAR(MAX)) AS object_comment"));
     }
 
     #[test]
@@ -1881,6 +1887,41 @@ mod tests {
         assert!(sql.contains("COALESCE(ep.value, '')"));
         assert!(sql.contains("OBJECT_DEFINITION(o.object_id)"));
         assert!(sql.contains("LOWER('%audit%')"));
+    }
+
+    #[test]
+    fn sqlserver_completion_assistant_casts_schema_and_empty_result_placeholders() {
+        let schema_request = CompletionAssistantRequest {
+            connection_id: "c1".to_string(),
+            database: "app".to_string(),
+            schema: None,
+            object_kinds: vec![CompletionAssistantObjectKind::Schema],
+            mask: "d".to_string(),
+            case_sensitive: false,
+            global_search: false,
+            max_results: Some(100),
+            search_in_comments: false,
+            search_in_definitions: false,
+            parent_schema: None,
+            parent_name: None,
+            match_mode: Some(CompletionAssistantMatchMode::Prefix),
+        };
+        let schema_sql = sqlserver_completion_assistant_sql(&schema_request, 100);
+
+        assert!(schema_sql.contains("CAST(NULL AS NVARCHAR(128)) AS parent_schema"));
+        assert!(schema_sql.contains("CAST(NULL AS NVARCHAR(128)) AS parent_name"));
+        assert!(schema_sql.contains("CAST(NULL AS NVARCHAR(MAX)) AS object_comment"));
+        assert!(schema_sql.contains("CAST(NULL AS NVARCHAR(128)) AS data_type"));
+
+        let empty_request = CompletionAssistantRequest {
+            object_kinds: vec![CompletionAssistantObjectKind::Database],
+            ..schema_request
+        };
+        let empty_sql = sqlserver_completion_assistant_sql(&empty_request, 100);
+
+        assert!(empty_sql.contains("CAST('' AS NVARCHAR(128)) AS name"));
+        assert!(empty_sql.contains("CAST(NULL AS NVARCHAR(128)) AS parent_schema"));
+        assert!(empty_sql.contains("CAST(NULL AS NVARCHAR(MAX)) AS object_comment"));
     }
 
     #[test]
