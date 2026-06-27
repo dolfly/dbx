@@ -346,6 +346,8 @@ export default withEnglishFallback({
     proxyUsernamePlaceholder: "任意",
     proxyPassword: "プロキシパスワード",
     proxyPasswordPlaceholder: "任意",
+    dremioArrowFlightSqlMode: "Arrow Flight SQL",
+    dremioLegacyJdbcMode: "Legacy JDBC",
     jdbcUrl: "JDBC URL",
     jdbcUrlPlaceholder: "jdbc:postgresql://localhost:5432/database",
     jdbcDriverClass: "ドライバークラス（任意）",

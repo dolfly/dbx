@@ -316,6 +316,21 @@ final class DbxJdbcPluginTest {
     }
 
     @Test
+    void jdbcUrlAppendsDremioConnectionUrlParamsWithSemicolon() throws Exception {
+        JsonNode connection = MAPPER.readTree("""
+            {
+              "connection_string": "jdbc:dremio:direct=dremio.example.com:31010",
+              "url_params": "schema=Samples;ssl=true"
+            }
+            """);
+
+        assertEquals(
+            "jdbc:dremio:direct=dremio.example.com:31010;schema=Samples;ssl=true",
+            DbxJdbcPlugin.jdbcUrl(connection)
+        );
+    }
+
+    @Test
     void jdbcUrlAppendsDb2ConnectionUrlParamsWithColonProperties() throws Exception {
         JsonNode connection = MAPPER.readTree("""
             {

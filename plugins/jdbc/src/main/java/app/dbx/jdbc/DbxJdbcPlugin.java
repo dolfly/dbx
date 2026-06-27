@@ -1704,7 +1704,7 @@ public final class DbxJdbcPlugin {
     }
 
     private static String jdbcUrlParamSeparator(String base) {
-        if (urlMatchesPrefix(base, "jdbc:sqlserver:")) {
+        if (urlMatchesPrefix(base, "jdbc:sqlserver:") || urlMatchesPrefix(base, "jdbc:dremio:")) {
             return base.endsWith(";") ? "" : ";";
         }
         if (jdbcUrlUsesColonProperties(base)) {

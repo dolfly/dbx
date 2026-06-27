@@ -50,12 +50,17 @@ type DbPickerView = "icon" | "list";
 type ConfigTab = "connection" | "advanced" | "tls" | "transport";
 type MqTokenSigningMode = "none" | "hs256" | "rs256";
 type NacosAuthKind = NacosAuthConfig["kind"];
+type DremioConnectionMode = "arrow-flight-sql" | "legacy";
 type JdbcDriverSelectItem = {
   id: string;
   label: string;
   paths: string[];
 };
 
+const DREMIO_ARROW_FLIGHT_SQL_JDBC_URL = "jdbc:arrow-flight-sql://127.0.0.1:32010";
+const DREMIO_ARROW_FLIGHT_SQL_JDBC_DRIVER_CLASS = "org.apache.arrow.driver.jdbc.ArrowFlightJdbcDriver";
+const DREMIO_LEGACY_JDBC_URL = "jdbc:dremio:direct=127.0.0.1:31010";
+const DREMIO_LEGACY_JDBC_DRIVER_CLASS = "com.dremio.jdbc.Driver";
 const NACOS_DEFAULT_CONSOLE_URL = "http://127.0.0.1:8085";
 const NACOS_LEGACY_SERVER_PORT = "8848";
 const NACOS_DOCKER_CONSOLE_PORT = "8085";
@@ -305,6 +310,11 @@ const connectionUrlInput = ref("");
 const appliedConnectionUrlInput = ref("");
 const oceanbaseSubMode = ref<"mysql" | "oracle">("mysql");
 const h2ConnectionMode = ref<H2ConnectionMode>("file");
+const dremioConnectionMode = ref<DremioConnectionMode>("legacy");
+const dremioConnectionUrls = ref<Record<DremioConnectionMode, string>>({
+  "arrow-flight-sql": DREMIO_ARROW_FLIGHT_SQL_JDBC_URL,
+  legacy: DREMIO_LEGACY_JDBC_URL,
+});
 const dialogStep = ref<DialogStep>("select");
 const dbPickerView = ref<DbPickerView>("icon");
 const dbSearchQuery = ref("");
@@ -521,6 +531,7 @@ const driverProfiles: Record<
   hive: { type: "hive", port: 10000, user: "", label: "Apache Hive", icon: "hive" },
   db2: { type: "db2", port: 50000, user: "db2inst1", label: "IBM DB2", icon: "db2" },
   informix: { type: "informix", port: 9088, user: "informix", label: "Informix", icon: "informix" },
+  dremio: { type: "jdbc", port: 31010, user: "", label: "Dremio", icon: "dremio" },
   neo4j: { type: "neo4j", port: 7687, user: "neo4j", label: "Neo4j", icon: "neo4j" },
   cassandra: { type: "cassandra", port: 9042, user: "cassandra", label: "Cassandra", icon: "cassandra" },
   bigquery: {
@@ -800,6 +811,79 @@ function applyNacosServerAddr(config: LegacyConnectionConfig, serverAddr: string
   config.ssl = parsed.protocol === "https:";
 }
 
+function applyDremioConnectionMode(mode: DremioConnectionMode) {
+  rememberCurrentDremioConnectionUrl();
+  dremioConnectionMode.value = mode;
+  form.value.connection_string = dremioConnectionUrls.value[mode] || dremioDefaultConnectionUrl(mode);
+  if (isDremioGeneratedDefaultDriverClass(form.value.jdbc_driver_class)) {
+    form.value.jdbc_driver_class = dremioDefaultDriverClass(mode);
+  }
+}
+
+function rememberCurrentDremioConnectionUrl() {
+  if (form.value.driver_profile !== "dremio") return;
+  const url = form.value.connection_string?.trim();
+  dremioConnectionUrls.value[dremioConnectionMode.value] = url || dremioDefaultConnectionUrl();
+}
+
+function resetDremioConnectionUrls(mode: DremioConnectionMode = "legacy", url?: string) {
+  dremioConnectionUrls.value = {
+    "arrow-flight-sql": DREMIO_ARROW_FLIGHT_SQL_JDBC_URL,
+    legacy: DREMIO_LEGACY_JDBC_URL,
+  };
+  if (url?.trim()) {
+    dremioConnectionUrls.value[mode] = url.trim();
+  }
+}
+
+function dremioDefaultConnectionUrl(mode = dremioConnectionMode.value) {
+  return mode === "legacy" ? DREMIO_LEGACY_JDBC_URL : DREMIO_ARROW_FLIGHT_SQL_JDBC_URL;
+}
+
+function dremioDefaultDriverClass(mode = dremioConnectionMode.value) {
+  return mode === "legacy" ? DREMIO_LEGACY_JDBC_DRIVER_CLASS : DREMIO_ARROW_FLIGHT_SQL_JDBC_DRIVER_CLASS;
+}
+
+function isDremioGeneratedDefaultConnectionUrl(value: string) {
+  const url = value.trim();
+  return url === DREMIO_ARROW_FLIGHT_SQL_JDBC_URL || url === `${DREMIO_ARROW_FLIGHT_SQL_JDBC_URL}?useEncryption=false` || url === DREMIO_LEGACY_JDBC_URL;
+}
+
+function isDremioGeneratedDefaultDriverClass(value: string | undefined) {
+  const driverClass = value?.trim() || "";
+  return !driverClass || driverClass === DREMIO_ARROW_FLIGHT_SQL_JDBC_DRIVER_CLASS || driverClass === DREMIO_LEGACY_JDBC_DRIVER_CLASS;
+}
+
+function restoreDremioConnectionDefaultsIfEmpty() {
+  if (form.value.driver_profile !== "dremio") return;
+  if (!form.value.connection_string?.trim()) {
+    form.value.connection_string = dremioDefaultConnectionUrl();
+  }
+  if (isDremioGeneratedDefaultDriverClass(form.value.jdbc_driver_class)) {
+    form.value.jdbc_driver_class = dremioDefaultDriverClass();
+  }
+}
+
+function syncDremioConnectionModeFromUrl() {
+  if (form.value.driver_profile !== "dremio") return;
+  restoreDremioConnectionDefaultsIfEmpty();
+  const nextMode = dremioConnectionModeForConfig({
+    connection_string: form.value.connection_string,
+    jdbc_driver_class: "",
+  });
+  dremioConnectionUrls.value[nextMode] = form.value.connection_string?.trim() || dremioDefaultConnectionUrl(nextMode);
+  if (nextMode === dremioConnectionMode.value) return;
+  dremioConnectionMode.value = nextMode;
+  if (isDremioGeneratedDefaultDriverClass(form.value.jdbc_driver_class)) {
+    form.value.jdbc_driver_class = dremioDefaultDriverClass(nextMode);
+  }
+}
+
+function dremioConnectionModeForConfig(config: Pick<ConnectionConfig, "connection_string" | "jdbc_driver_class">): DremioConnectionMode {
+  const haystack = `${config.connection_string || ""}\n${config.jdbc_driver_class || ""}`.toLowerCase();
+  return haystack.includes("jdbc:dremio:") || haystack.includes("com.dremio.jdbc.driver") ? "legacy" : "arrow-flight-sql";
+}
+
 function isCustomCompatibleProfile() {
   return selectedType.value === "custom_mysql" || selectedType.value === "custom_postgres";
 }
@@ -835,6 +919,10 @@ function applyProfile(val: string, preserveConnectionFields = false) {
       form.value.jdbc_driver_class = "";
       form.value.jdbc_driver_paths = [];
       jdbcDriverPathsInput.value = "";
+      if (val === "dremio") {
+        resetDremioConnectionUrls();
+        applyDremioConnectionMode("legacy");
+      }
     }
     if (profile.type === "prestosql") {
       form.value.connection_string = undefined;
@@ -955,6 +1043,8 @@ watch(
       if (profile === "gbase8a" || profile === "gbase8s") {
         selectedType.value = "gbase";
       }
+      dremioConnectionMode.value = profile === "dremio" ? dremioConnectionModeForConfig(config) : "legacy";
+      resetDremioConnectionUrls(dremioConnectionMode.value, profile === "dremio" ? config.connection_string : undefined);
       mongoUseUrl.value = !!config.connection_string;
       jdbcDriverPathsInput.value = (config.jdbc_driver_paths || []).join("\n");
       jdbcManualClasspathOpen.value = config.db_type === "prestosql" || (config.jdbc_driver_paths || []).length > 0;
@@ -971,6 +1061,8 @@ watch(
       resetNacosFields();
       oceanbaseSubMode.value = "mysql";
       h2ConnectionMode.value = "file";
+      dremioConnectionMode.value = "legacy";
+      resetDremioConnectionUrls();
       dialogStep.value = "select";
       configTab.value = "connection";
     }
@@ -1118,6 +1210,7 @@ const iconTypeMap: Record<string, string> = {
   hive: "hive",
   db2: "db2",
   informix: "informix",
+  dremio: "dremio",
   iris: "iris",
   neo4j: "neo4j",
   cassandra: "cassandra",
@@ -1202,6 +1295,7 @@ const dbOptions: DbOption[] = [
   { value: "manticoresearch", label: "Manticore Search" },
   { value: "custom_mysql", label: "Custom (MySQL)" },
   { value: "custom_postgres", label: "Custom (PostgreSQL)" },
+  { value: "dremio", label: "Dremio" },
 ];
 
 const dbCategories = computed<DbCategory[]>(() => [{ key: "all", title: "", options: dbOptions }]);
@@ -1236,6 +1330,7 @@ const isH2FileMode = computed(() => form.value.db_type === "h2" && h2ConnectionM
 const usesLocalFilePathInput = computed(() => isLocalFileTypeDb(form.value.db_type) && (form.value.db_type !== "h2" || isH2FileMode.value));
 
 const connectionUrlPlaceholder = computed(() => getUrlPlaceholder(form.value.db_type));
+const jdbcUsernamePlaceholder = computed(() => (form.value.driver_profile === "dremio" ? "" : "sa"));
 const filePathPlaceholder = computed(() => {
   if (form.value.db_type === "duckdb") return "/path/to/database.duckdb or :memory:";
   if (form.value.db_type === "access") return "/path/to/database.accdb";
@@ -1526,6 +1621,83 @@ function formValueForSubmit(): Omit<ConnectionConfig, "id"> {
   return applyParsedConnectionUrl(form.value, parseConnectionUrl(url, selectedType.value));
 }
 
+function applyDremioJdbcMetadata(config: LegacyConnectionConfig) {
+  config.connection_string = config.connection_string?.trim() || dremioDefaultConnectionUrl();
+  try {
+    const parsed = parseConnectionUrl(config.connection_string);
+    if (parsed.driverProfile !== "dremio") return;
+    config.host = parsed.host;
+    config.port = parsed.port;
+    config.database = config.database?.trim() || parsed.database;
+    config.connection_string = dremioConnectionStringForSubmit(config.connection_string, config.url_params, config.database);
+    config.url_params = "";
+    if (!config.username) config.username = parsed.username;
+    if (!config.password) config.password = parsed.password;
+  } catch {
+    // Keep custom JDBC input editable; the agent will surface driver-specific URL errors.
+  }
+}
+
+function dremioConnectionStringForSubmit(connectionString: string, urlParams: string | undefined, database: string | undefined) {
+  const params = dremioSubmitUrlParams(connectionString, urlParams, database);
+  if (!params) return connectionString;
+  return `${connectionString}${dremioSubmitUrlParamSeparator(connectionString)}${params}`;
+}
+
+function dremioSubmitUrlParams(connectionString: string | undefined, urlParams: string | undefined, database: string | undefined) {
+  const existingKeys = dremioUrlParamKeys(connectionString || "");
+  const extraParams = filterDremioUrlParams(urlParams || "", existingKeys);
+  if (database?.trim() && !existingKeys.has("schema") && !dremioUrlParamKeys(extraParams.join("&")).has("schema")) {
+    extraParams.push(`schema=${database.trim()}`);
+  }
+  return extraParams.join(dremioConnectionStringUsesLegacyUrlParams(connectionString || "") ? ";" : "&");
+}
+
+function dremioSubmitUrlParamSeparator(connectionString: string) {
+  if (dremioConnectionStringUsesLegacyUrlParams(connectionString)) {
+    return connectionString.endsWith(";") ? "" : ";";
+  }
+  return connectionString.includes("?") ? (connectionString.endsWith("?") || connectionString.endsWith("&") ? "" : "&") : "?";
+}
+
+function dremioConnectionStringUsesLegacyUrlParams(connectionString: string) {
+  if (/^jdbc:dremio:/i.test(connectionString)) return true;
+  if (/^jdbc:arrow-flight-sql:\/\//i.test(connectionString)) return false;
+  return dremioConnectionMode.value === "legacy";
+}
+
+function filterDremioUrlParams(urlParams: string, existingKeys: Set<string>) {
+  const result: string[] = [];
+  for (const part of urlParams.split(/[&;]/)) {
+    const param = part.trim();
+    if (!param) continue;
+    const key = param.split("=")[0]?.trim().toLowerCase();
+    if (!key || existingKeys.has(key)) continue;
+    result.push(param);
+  }
+  return result;
+}
+
+function dremioUrlParamKeys(value: string) {
+  const keys = new Set<string>();
+  const params = dremioUrlParamString(value);
+  for (const part of params.split(/[&;]/)) {
+    const key = part.split("=")[0]?.trim().toLowerCase();
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
+function dremioUrlParamString(value: string) {
+  if (/^jdbc:dremio:/i.test(value)) {
+    return value.split(";").slice(1).join(";");
+  }
+  const queryStart = value.indexOf("?");
+  if (queryStart < 0) return value;
+  const fragmentStart = value.indexOf("#", queryStart + 1);
+  return value.slice(queryStart + 1, fragmentStart < 0 ? undefined : fragmentStart);
+}
+
 function generateConnectionName(): string {
   const label = selectedProfile().label;
   const rand = Math.random().toString(36).slice(2, 6);
@@ -1688,9 +1860,13 @@ function connectionConfigForSubmit(id: string): ConnectionConfig {
   }
   if (jdbcBackedDatabaseTypes.has(config.db_type)) {
     if (config.db_type === "jdbc") {
-      config.host = "";
-      config.port = 0;
-      config.connection_string = config.connection_string?.trim() || "";
+      if (config.driver_profile === "dremio") {
+        applyDremioJdbcMetadata(config);
+      } else {
+        config.host = "";
+        config.port = 0;
+        config.connection_string = config.connection_string?.trim() || "";
+      }
     } else if (config.db_type === "prestosql") {
       config.connection_string = undefined;
       config.jdbc_driver_class = config.jdbc_driver_class?.trim() || "io.prestosql.jdbc.PrestoDriver";
@@ -2161,6 +2337,8 @@ function resetForm() {
   mongoUseUrl.value = false;
   resetMqFields();
   oceanbaseSubMode.value = "mysql";
+  dremioConnectionMode.value = "legacy";
+  resetDremioConnectionUrls();
   jdbcDriverPathsInput.value = "";
   selectedJdbcDriverPath.value = "";
   connectionUrlInput.value = "";
@@ -2925,13 +3103,24 @@ function openExternalUrl(url: string) {
 
                 <!-- JDBC: optional external plugin -->
                 <template v-if="isJdbcConnection">
+                  <div v-if="form.driver_profile === 'dremio'" class="grid grid-cols-4 items-center gap-4">
+                    <Label :class="connectionLabelClass">{{ t("connection.mode") }}</Label>
+                    <div class="col-span-3 flex gap-2">
+                      <Button size="sm" :variant="dremioConnectionMode === 'arrow-flight-sql' ? 'default' : 'outline'" @click="applyDremioConnectionMode('arrow-flight-sql')">
+                        {{ t("connection.dremioArrowFlightSqlMode") }}
+                      </Button>
+                      <Button size="sm" :variant="dremioConnectionMode === 'legacy' ? 'default' : 'outline'" @click="applyDremioConnectionMode('legacy')">
+                        {{ t("connection.dremioLegacyJdbcMode") }}
+                      </Button>
+                    </div>
+                  </div>
                   <div class="grid grid-cols-4 items-center gap-4">
                     <Label :class="connectionLabelClass">{{ t("connection.jdbcUrl") }}</Label>
-                    <Input v-model="form.connection_string" class="col-span-3" :placeholder="t('connection.jdbcUrlPlaceholder')" />
+                    <Input v-model="form.connection_string" class="col-span-3" :placeholder="t('connection.jdbcUrlPlaceholder')" @blur="syncDremioConnectionModeFromUrl" />
                   </div>
                   <div class="grid grid-cols-4 items-center gap-4">
                     <Label :class="connectionLabelClass">{{ t("connection.user") }}</Label>
-                    <Input v-model="form.username" class="col-span-3" placeholder="sa" />
+                    <Input v-model="form.username" class="col-span-3" :placeholder="jdbcUsernamePlaceholder" />
                   </div>
                   <div class="grid grid-cols-4 items-center gap-4">
                     <Label :class="connectionLabelClass">{{ t("connection.password") }}</Label>

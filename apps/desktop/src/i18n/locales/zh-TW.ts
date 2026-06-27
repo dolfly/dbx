@@ -353,6 +353,8 @@ export default withEnglishFallback({
     proxyUsernamePlaceholder: "可選",
     proxyPassword: "代理伺服器密碼",
     proxyPasswordPlaceholder: "可選",
+    dremioArrowFlightSqlMode: "Arrow Flight SQL",
+    dremioLegacyJdbcMode: "Legacy JDBC",
     jdbcUrl: "JDBC URL",
     jdbcUrlPlaceholder: "jdbc:postgresql://localhost:5432/database",
     jdbcDriverClass: "驅動程式類別（可選）",

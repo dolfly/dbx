@@ -356,6 +356,8 @@ export default withEnglishFallback({
     proxyUsernamePlaceholder: "Opzionale",
     proxyPassword: "Password Proxy",
     proxyPasswordPlaceholder: "Opzionale",
+    dremioArrowFlightSqlMode: "Arrow Flight SQL",
+    dremioLegacyJdbcMode: "JDBC legacy",
     jdbcUrl: "URL JDBC",
     jdbcUrlPlaceholder: "jdbc:postgresql://localhost:5432/database",
     jdbcDriverClass: "Classe Driver (opzionale)",
