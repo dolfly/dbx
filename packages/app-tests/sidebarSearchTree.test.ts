@@ -84,6 +84,43 @@ test("preserves loaded schema children when the database itself matches search",
   assert.equal(filtered[0]?.children?.[0]?.label, "public");
 });
 
+test("preserves loaded children when the connection itself matches search", () => {
+  const nodes: TreeNode[] = [
+    {
+      id: "conn:1",
+      label: "192.168.0.200_3306",
+      type: "connection",
+      connectionId: "conn:1",
+      isExpanded: true,
+      children: [
+        {
+          id: "conn:1:inventory",
+          label: "inventory",
+          type: "database",
+          connectionId: "conn:1",
+          database: "inventory",
+          isExpanded: true,
+          children: [
+            {
+              id: "conn:1:inventory:products",
+              label: "products",
+              type: "table",
+              connectionId: "conn:1",
+              database: "inventory",
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const filtered = filterSidebarTree(nodes, "192.168.0.200", new Set());
+
+  assert.equal(filtered[0]?.label, "192.168.0.200_3306");
+  assert.equal(filtered[0]?.children?.[0]?.label, "inventory");
+  assert.equal(filtered[0]?.children?.[0]?.children?.[0]?.label, "products");
+});
+
 test("matches table comments during sidebar search", () => {
   const nodes: TreeNode[] = [
     {
@@ -173,7 +210,7 @@ test("connection search results stay visible before connecting", () => {
   );
 });
 
-test("connection search copies do not keep stale loading state", () => {
+test("connection search copies preserve loading state", () => {
   const nodes: TreeNode[] = [
     {
       id: "conn:1",
@@ -196,5 +233,5 @@ test("connection search copies do not keep stale loading state", () => {
   const filtered = filterSidebarTree(nodes, "orders", new Set());
 
   assert.equal(filtered[0]?.type, "connection");
-  assert.equal(filtered[0]?.isLoading, false);
+  assert.equal(filtered[0]?.isLoading, true);
 });
