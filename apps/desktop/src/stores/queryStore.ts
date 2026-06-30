@@ -984,6 +984,10 @@ export const useQueryStore = defineStore("query", () => {
     releaseTabsWhere((tab) => tab.connectionId === connectionId && tab.database === database);
   }
 
+  function isDatabaseOpen(connectionId: string, database: string) {
+    return tabs.value.some((tab) => tab.connectionId === connectionId && tab.database === database);
+  }
+
   function updateSql(id: string, sql: string) {
     const tab = tabs.value.find((t) => t.id === id);
     if (tab) {
@@ -2484,6 +2488,7 @@ export const useQueryStore = defineStore("query", () => {
     closeDatabaseTabs,
     releaseConnectionTabs,
     releaseDatabaseTabs,
+    isDatabaseOpen,
     updateSql,
     updateEditorViewport,
     updateEditorSelection,
