@@ -74,6 +74,7 @@ import { connectionFilePath, defaultSqliteBackupFileName, isMemorySqlitePath, sq
 import { revealPathInFileManager } from "@/lib/tauri";
 import { clearActiveTableReferencePayload, createTableReferencePayload, createTableReferenceDropEvent, setActiveTableReferencePayload, type QueryEditorTableReferencePayload } from "@/lib/queryEditorTableDrop";
 import { editableRowIdentifierColumns, usesSyntheticRowIdKey } from "@/lib/tableEditing";
+import { tableOpenPageLimit } from "@/lib/tableOpenPageLimit";
 import { supportsDatabaseCreation, supportsDatabaseSearch, supportsFieldLineage, supportsObjectBrowserTreeNode, supportsSchemaDiagram, supportsSqlFileExecution, supportsTableImport, supportsTableTruncate, supportsTableStructureEditing, usesTreeSchemaMode } from "@/lib/databaseCapabilities";
 import { copyNameForTreeNode, objectSourceKindForTreeNode, sidebarSelectionCopyAction, treeNodeRowAction, treeNodeRowDoubleClickAction } from "@/lib/treeNodeClick";
 import { formatSqlInsert } from "@/lib/exportFormats";
@@ -1047,7 +1048,7 @@ async function openData() {
 
     const querySchema = connectionObjectTreeQuerySchema(config, node.database, tableSchema);
     const effectiveDbType = effectiveDatabaseTypeForConnection(config);
-    const limit = settingsStore.editorSettings.pageSize;
+    const limit = tableOpenPageLimit();
     const refreshTableMetaInBackground = async () => {
       const metadataStartedAt = performance.now();
       console.info("[DBX][openData:metadata:start]", {
@@ -1134,7 +1135,11 @@ async function openData() {
     logPhase("sql-updated", { tabId });
 
     console.info("[DBX][openData:execute:start]", { traceId, tabId, elapsed: elapsed() });
-    await queryStore.executeTabSql(tabId, sql, { sourceTraceId: traceId, skipEnsureConnected: true });
+    await queryStore.executeTabSql(tabId, sql, {
+      sourceTraceId: traceId,
+      skipEnsureConnected: true,
+      pagination: { limit, offset: 0 },
+    });
     console.info("[DBX][openData:execute:done]", { traceId, tabId, elapsed: elapsed() });
     logPhase("execute-tab-sql", { tabId });
     if (shouldRefreshTableMeta && isCurrentDataTab()) {
