@@ -152,6 +152,7 @@ import type { DataGridSortDirection, DataGridSortMode } from "@/lib/dataGridSort
 import { getTableMetadataCapabilities } from "@/lib/tableMetadataCapabilities";
 import { supportsTableStructureEditing } from "@/lib/databaseCapabilities";
 import { forgetDataGridConditionHistory, loadDataGridConditionHistory, rememberDataGridConditionHistory } from "@/lib/dataGridConditionHistory";
+import { getDataGridConditionSuggestionPosition } from "@/lib/dataGridConditionSuggestionPosition";
 import { caretPositionInsideInsertedSqlSingleQuotes, insertedSqlSingleQuoteAtCaret } from "@/lib/sqlQuoteCaret";
 import { effectiveDatabaseTypeForConnection } from "@/lib/jdbcDialect";
 import { isMacOS } from "@/lib/platform";
@@ -494,9 +495,8 @@ const whereFilterInputRef = ref<HTMLTextAreaElement>();
 const whereFilterOverlayRef = ref<HTMLTextAreaElement>();
 const whereConditionPaneRef = ref<HTMLDivElement>();
 const whereConditionControlRef = ref<HTMLDivElement>();
-const whereMeasureRef = ref<HTMLSpanElement>();
-const whereSuggestionLeft = ref(0);
-const whereSuggestionPosition = ref({ left: 0, top: 0 });
+const whereSuggestionDropdownRef = ref<HTMLDivElement>();
+const whereSuggestionPosition = ref({ left: 0, top: 0, width: 180 });
 const whereConditionRendered = ref(false);
 const whereConditionExpanded = ref(false);
 const whereConditionHeight = ref(28);
@@ -513,9 +513,8 @@ const orderByInputRef = ref<HTMLTextAreaElement>();
 const orderByOverlayRef = ref<HTMLTextAreaElement>();
 const orderByConditionPaneRef = ref<HTMLDivElement>();
 const orderByConditionControlRef = ref<HTMLDivElement>();
-const orderByMeasureRef = ref<HTMLSpanElement>();
-const orderBySuggestionLeft = ref(0);
-const orderBySuggestionPosition = ref({ left: 0, top: 0 });
+const orderBySuggestionDropdownRef = ref<HTMLDivElement>();
+const orderBySuggestionPosition = ref({ left: 0, top: 0, width: 180 });
 const orderByConditionRendered = ref(false);
 const orderByConditionExpanded = ref(false);
 const orderByConditionHeight = ref(28);
@@ -524,11 +523,14 @@ const orderByConditionScrollTop = ref(0);
 const orderByConditionImmediateHeight = ref(false);
 let orderByConditionCollapseTimer: ReturnType<typeof setTimeout> | undefined;
 let suppressNextOrderByWatchResize = false;
+const conditionHistoryPreview = ref<{ value: string; left: number; top: number; maxWidth: number; arrowTop: number; side: "left" | "right" } | null>(null);
 
 const orderByInput = ref(props.initialOrderByInput ?? "");
 const hasOrderByInput = computed(() => orderByInput.value.trim().length > 0);
 const whereFilterInput = ref(props.initialWhereInput ?? "");
 let previousWhereFilterInputValue = whereFilterInput.value;
+let suppressWhereHistoryOnNextEmptyInput = false;
+let suppressOrderByHistoryOnNextEmptyInput = false;
 const hasWhereFilterInput = computed(() => whereFilterInput.value.trim().length > 0);
 const conditionHistoryScope = computed(() => ({
   connectionId: props.connectionId,
@@ -552,6 +554,7 @@ const whereSearchPaneStyle = computed(() => {
 const whereSuggestionStyle = computed(() => ({
   left: `${whereSuggestionPosition.value.left}px`,
   top: `${whereSuggestionPosition.value.top}px`,
+  width: `${whereSuggestionPosition.value.width}px`,
 }));
 const showWhereSuggestionDropdown = computed(() => whereSuggestions.value.length > 0 || whereHistoryMenuOpen.value);
 const whereHistoryEmptyText = computed(() => (whereFilterInput.value.trim() ? t("grid.conditionHistoryNoMatches") : t("grid.conditionHistoryEmpty")));
@@ -559,13 +562,29 @@ const whereHistoryEmptyText = computed(() => (whereFilterInput.value.trim() ? t(
 const orderBySuggestionStyle = computed(() => ({
   left: `${orderBySuggestionPosition.value.left}px`,
   top: `${orderBySuggestionPosition.value.top}px`,
+  width: `${orderBySuggestionPosition.value.width}px`,
 }));
 const showOrderBySuggestionDropdown = computed(() => orderBySuggestions.value.length > 0 || orderByHistoryMenuOpen.value);
 const orderByHistoryEmptyText = computed(() => (orderByInput.value.trim() ? t("grid.conditionHistoryNoMatches") : t("grid.conditionHistoryEmpty")));
+const conditionHistoryPreviewStyle = computed<CSSProperties>(() => {
+  const preview = conditionHistoryPreview.value;
+  if (!preview) return {};
+  return {
+    left: `${preview.left}px`,
+    maxWidth: `${preview.maxWidth}px`,
+    top: `${preview.top}px`,
+  };
+});
+const conditionHistoryPreviewArrowStyle = computed<CSSProperties>(() => {
+  const preview = conditionHistoryPreview.value;
+  if (!preview) return {};
+  return {
+    top: `${preview.arrowTop}px`,
+  };
+});
 
 type ConditionInputKind = "where" | "orderBy";
 const CONDITION_EXPANDED_MAX_HEIGHT = 260;
-let openingConditionHistoryKind: ConditionInputKind | null = null;
 
 function conditionInputRef(kind: ConditionInputKind) {
   return kind === "where" ? whereFilterInputRef.value : orderByInputRef.value;
@@ -941,6 +960,16 @@ function resizeConditionInput(kind: ConditionInputKind, options: { focusOverlay?
 }
 
 function onConditionInputClick(kind: ConditionInputKind) {
+  if (kind === "where" && showWhereSuggestionDropdown.value) {
+    dismissWhereSuggestions();
+    resizeConditionInput(kind, { expandFromFocus: true, focusOverlay: true });
+    return;
+  }
+  if (kind === "orderBy" && showOrderBySuggestionDropdown.value) {
+    dismissOrderBySuggestions();
+    resizeConditionInput(kind, { expandFromFocus: true, focusOverlay: true });
+    return;
+  }
   updateConditionSuggestionPosition(kind);
   resizeConditionInput(kind, { expandFromFocus: true, focusOverlay: true });
 }
@@ -977,21 +1006,31 @@ function updateConditionSuggestionPosition(kind: ConditionInputKind) {
   }
 }
 
-function setConditionHistorySuggestionPosition(kind: ConditionInputKind, target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    updateConditionSuggestionPosition(kind);
+function showConditionHistoryPreview(value: string, event: MouseEvent) {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  if (!target) return;
+  const textElement = target.querySelector<HTMLElement>("[data-condition-history-text]");
+  if (!textElement || textElement.scrollWidth <= textElement.clientWidth + 1) {
+    hideConditionHistoryPreview();
     return;
   }
   const rect = target.getBoundingClientRect();
-  const position = {
-    left: Math.max(0, Math.min(rect.left, window.innerWidth - 180)),
-    top: rect.bottom + 2,
-  };
-  if (kind === "where") {
-    whereSuggestionPosition.value = position;
-  } else {
-    orderBySuggestionPosition.value = position;
-  }
+  const gap = 10;
+  const minWidth = 280;
+  const preferredWidth = 560;
+  const availableRight = window.innerWidth - rect.right - gap - 8;
+  const availableLeft = rect.left - gap - 8;
+  const placeRight = availableRight >= minWidth || availableRight >= availableLeft;
+  const maxWidth = Math.max(minWidth, Math.min(preferredWidth, placeRight ? availableRight : availableLeft));
+  const left = placeRight ? rect.right + gap : Math.max(8, rect.left - gap - maxWidth);
+  const estimatedHeight = Math.min(260, Math.max(56, Math.ceil(value.length / 58) * 18 + 24));
+  const top = Math.min(Math.max(8, rect.top), Math.max(8, window.innerHeight - estimatedHeight - 8));
+  const arrowTop = Math.min(Math.max(14, rect.top + rect.height / 2 - top), estimatedHeight - 14);
+  conditionHistoryPreview.value = { value, left, top, maxWidth, arrowTop, side: placeRight ? "left" : "right" };
+}
+
+function hideConditionHistoryPreview() {
+  conditionHistoryPreview.value = null;
 }
 
 type LocalFilterMode = "local" | "server";
@@ -1989,16 +2028,9 @@ function onSearchKeydown(e: KeyboardEvent) {
 function updateWhereSuggestionPosition() {
   nextTick(() => {
     const input = conditionEditorRef("where");
-    const measure = whereMeasureRef.value;
-    if (!input || !measure) return;
-    const cursorPos = input.selectionStart ?? 0;
-    measure.textContent = whereFilterInput.value.slice(0, cursorPos);
-    whereSuggestionLeft.value = measure.getBoundingClientRect().width;
+    if (!input) return;
     const inputRect = input.getBoundingClientRect();
-    whereSuggestionPosition.value = {
-      left: Math.max(0, Math.min(inputRect.left + whereSuggestionLeft.value, window.innerWidth - 180)),
-      top: inputRect.bottom + 2,
-    };
+    whereSuggestionPosition.value = getDataGridConditionSuggestionPosition(inputRect, { viewportWidth: window.innerWidth });
   });
 }
 
@@ -2030,6 +2062,24 @@ function dismissWhereSuggestions() {
   whereSuggestions.value = [];
   whereSuggestionIndex.value = -1;
   whereHistoryMenuOpen.value = false;
+  hideConditionHistoryPreview();
+}
+
+function eventTargetInside(event: Event, ...elements: Array<HTMLElement | undefined>): boolean {
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  const target = event.target instanceof Node ? event.target : null;
+  return elements.some((element) => element && (path.includes(element) || (target ? element.contains(target) : false)));
+}
+
+function onConditionSuggestionDocumentPointerDown(event: PointerEvent) {
+  const whereExpandedPane = whereFilterOverlayRef.value?.parentElement ?? undefined;
+  const orderByExpandedPane = orderByOverlayRef.value?.parentElement ?? undefined;
+  if (!eventTargetInside(event, whereFilterInputRef.value, whereFilterOverlayRef.value, whereConditionPaneRef.value, whereExpandedPane, whereSuggestionDropdownRef.value)) {
+    dismissWhereSuggestions();
+  }
+  if (!eventTargetInside(event, orderByInputRef.value, orderByOverlayRef.value, orderByConditionPaneRef.value, orderByExpandedPane, orderBySuggestionDropdownRef.value)) {
+    dismissOrderBySuggestions();
+  }
 }
 
 function navigateWhereSuggestion(delta: number) {
@@ -2041,32 +2091,29 @@ function navigateWhereSuggestion(delta: number) {
   whereSuggestionIndex.value = Math.min(Math.max(whereSuggestionIndex.value + delta, 0), whereSuggestions.value.length - 1);
 }
 
-function showWhereHistorySuggestions() {
-  const history = loadDataGridConditionHistory("where", conditionHistoryScope.value, whereFilterInput.value);
+function openWhereHistoryMenu() {
+  if (showWhereSuggestionDropdown.value) {
+    dismissWhereSuggestions();
+    return;
+  }
+  conditionEditorRef("where")?.focus();
+  whereHistoryMenuOpen.value = true;
+  const history = loadDataGridConditionHistory("where", conditionHistoryScope.value);
   whereSuggestions.value = history.map((value) => ({ value, kind: "history" }));
   whereSuggestionIndex.value = -1;
-  if (openingConditionHistoryKind === "where") return;
   updateWhereSuggestionPosition();
 }
 
-function openWhereHistoryMenu(event?: MouseEvent) {
-  openingConditionHistoryKind = "where";
-  conditionEditorRef("where")?.focus();
-  whereHistoryMenuOpen.value = true;
-  const history = loadDataGridConditionHistory("where", conditionHistoryScope.value, whereFilterInput.value);
-  whereSuggestions.value = history.map((value) => ({ value, kind: "history" }));
-  whereSuggestionIndex.value = -1;
-  setConditionHistorySuggestionPosition("where", event?.currentTarget ?? null);
-  requestAnimationFrame(() => {
-    if (openingConditionHistoryKind === "where") openingConditionHistoryKind = null;
-  });
+function clearWhereFilterInput() {
+  suppressWhereHistoryOnNextEmptyInput = true;
+  whereFilterInput.value = "";
+  dismissWhereSuggestions();
+  void applyWhereFilter();
 }
 
 function deleteWhereHistorySuggestion(value: string) {
   const history = forgetDataGridConditionHistory("where", conditionHistoryScope.value, value);
-  const query = whereFilterInput.value;
-  const filtered = query.trim() ? loadDataGridConditionHistory("where", conditionHistoryScope.value, query) : history;
-  whereSuggestions.value = filtered.map((item) => ({ value: item, kind: "history" }));
+  whereSuggestions.value = history.map((item) => ({ value: item, kind: "history" }));
   whereSuggestionIndex.value = whereSuggestions.value.length ? Math.min(whereSuggestionIndex.value, whereSuggestions.value.length - 1) : -1;
   whereHistoryMenuOpen.value = true;
   updateWhereSuggestionPosition();
@@ -2121,12 +2168,15 @@ watch(whereFilterInput, (val) => {
   }
   whereSuggestions.value = [];
   whereHistoryMenuOpen.value = false;
-  if (!props.tableMeta?.columns?.length) return;
   const trimmed = val.trim();
   if (trimmed.length === 0) {
-    showWhereHistorySuggestions();
+    if (suppressWhereHistoryOnNextEmptyInput) {
+      suppressWhereHistoryOnNextEmptyInput = false;
+    }
     return;
   }
+  suppressWhereHistoryOnNextEmptyInput = false;
+  if (!props.tableMeta?.columns?.length) return;
   const lastToken = trimmed.split(/[\s,()><=!&|]+/).pop() || "";
   if (lastToken.length > 0) {
     const tl = lastToken.toLowerCase();
@@ -2205,16 +2255,9 @@ function onWhereFilterKeydown(e: KeyboardEvent) {
 function updateOrderBySuggestionPosition() {
   nextTick(() => {
     const input = conditionEditorRef("orderBy");
-    const measure = orderByMeasureRef.value;
-    if (!input || !measure) return;
-    const cursorPos = input.selectionStart ?? 0;
-    measure.textContent = orderByInput.value.slice(0, cursorPos);
-    orderBySuggestionLeft.value = measure.getBoundingClientRect().width;
+    if (!input) return;
     const inputRect = input.getBoundingClientRect();
-    orderBySuggestionPosition.value = {
-      left: Math.max(0, Math.min(inputRect.left + orderBySuggestionLeft.value, window.innerWidth - 180)),
-      top: inputRect.bottom + 2,
-    };
+    orderBySuggestionPosition.value = getDataGridConditionSuggestionPosition(inputRect, { viewportWidth: window.innerWidth });
   });
 }
 
@@ -2246,6 +2289,7 @@ function dismissOrderBySuggestions() {
   orderBySuggestions.value = [];
   orderBySuggestionIndex.value = -1;
   orderByHistoryMenuOpen.value = false;
+  hideConditionHistoryPreview();
 }
 
 function navigateOrderBySuggestion(delta: number) {
@@ -2257,32 +2301,29 @@ function navigateOrderBySuggestion(delta: number) {
   orderBySuggestionIndex.value = Math.min(Math.max(orderBySuggestionIndex.value + delta, 0), orderBySuggestions.value.length - 1);
 }
 
-function showOrderByHistorySuggestions() {
-  const history = loadDataGridConditionHistory("orderBy", conditionHistoryScope.value, orderByInput.value);
+function openOrderByHistoryMenu() {
+  if (showOrderBySuggestionDropdown.value) {
+    dismissOrderBySuggestions();
+    return;
+  }
+  conditionEditorRef("orderBy")?.focus();
+  orderByHistoryMenuOpen.value = true;
+  const history = loadDataGridConditionHistory("orderBy", conditionHistoryScope.value);
   orderBySuggestions.value = history.map((value) => ({ value, kind: "history" }));
   orderBySuggestionIndex.value = -1;
-  if (openingConditionHistoryKind === "orderBy") return;
   updateOrderBySuggestionPosition();
 }
 
-function openOrderByHistoryMenu(event?: MouseEvent) {
-  openingConditionHistoryKind = "orderBy";
-  conditionEditorRef("orderBy")?.focus();
-  orderByHistoryMenuOpen.value = true;
-  const history = loadDataGridConditionHistory("orderBy", conditionHistoryScope.value, orderByInput.value);
-  orderBySuggestions.value = history.map((value) => ({ value, kind: "history" }));
-  orderBySuggestionIndex.value = -1;
-  setConditionHistorySuggestionPosition("orderBy", event?.currentTarget ?? null);
-  requestAnimationFrame(() => {
-    if (openingConditionHistoryKind === "orderBy") openingConditionHistoryKind = null;
-  });
+function clearOrderByInput() {
+  suppressOrderByHistoryOnNextEmptyInput = true;
+  orderByInput.value = "";
+  dismissOrderBySuggestions();
+  void applyOrderBySearch();
 }
 
 function deleteOrderByHistorySuggestion(value: string) {
   const history = forgetDataGridConditionHistory("orderBy", conditionHistoryScope.value, value);
-  const query = orderByInput.value;
-  const filtered = query.trim() ? loadDataGridConditionHistory("orderBy", conditionHistoryScope.value, query) : history;
-  orderBySuggestions.value = filtered.map((item) => ({ value: item, kind: "history" }));
+  orderBySuggestions.value = history.map((item) => ({ value: item, kind: "history" }));
   orderBySuggestionIndex.value = orderBySuggestions.value.length ? Math.min(orderBySuggestionIndex.value, orderBySuggestions.value.length - 1) : -1;
   orderByHistoryMenuOpen.value = true;
   updateOrderBySuggestionPosition();
@@ -2297,12 +2338,15 @@ watch(orderByInput, (val) => {
   }
   orderBySuggestions.value = [];
   orderByHistoryMenuOpen.value = false;
-  if (!props.tableMeta?.columns?.length) return;
   const trimmed = val.trim();
   if (trimmed.length === 0) {
-    showOrderByHistorySuggestions();
+    if (suppressOrderByHistoryOnNextEmptyInput) {
+      suppressOrderByHistoryOnNextEmptyInput = false;
+    }
     return;
   }
+  suppressOrderByHistoryOnNextEmptyInput = false;
+  if (!props.tableMeta?.columns?.length) return;
   const lastToken = trimmed.split(/[\s,()]+/).pop() || "";
   if (lastToken.length > 0 && !["asc", "desc"].includes(lastToken.toLowerCase())) {
     const tl = lastToken.toLowerCase();
@@ -5670,6 +5714,7 @@ onMounted(() => {
   window.visualViewport?.addEventListener("resize", resizeFocusedConditionInputs);
   window.addEventListener("dbx:ui-scale-applied", scheduleCanvasPixelRatioRefresh);
   window.addEventListener("dbx:ui-scale-applied", resizeFocusedConditionInputs);
+  document.addEventListener("pointerdown", onConditionSuggestionDocumentPointerDown, true);
 });
 onDeactivated(pauseCanvasGridWork);
 onUnmounted(() => {
@@ -5692,6 +5737,7 @@ onUnmounted(() => {
   window.visualViewport?.removeEventListener("resize", resizeFocusedConditionInputs);
   window.removeEventListener("dbx:ui-scale-applied", scheduleCanvasPixelRatioRefresh);
   window.removeEventListener("dbx:ui-scale-applied", resizeFocusedConditionInputs);
+  document.removeEventListener("pointerdown", onConditionSuggestionDocumentPointerDown, true);
 });
 
 function setRowStatusFilter(value: string) {
@@ -8222,10 +8268,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           placeholder="WHERE"
                           @input="onWhereFilterInput"
                           @keydown="onWhereFilterKeydown"
-                          @focus="
-                            showWhereHistorySuggestions();
-                            resizeConditionInput('where');
-                          "
+                          @focus="resizeConditionInput('where')"
                           @click="onConditionInputClick('where')"
                           @wheel="onConditionInputWheel"
                           @blur="
@@ -8237,14 +8280,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                       <button class="text-muted-foreground hover:text-foreground shrink-0" type="button" @mousedown.prevent="openWhereHistoryMenu">
                         <ChevronDown class="w-3 h-3" />
                       </button>
-                      <button
-                        v-if="hasWhereFilterInput"
-                        class="text-muted-foreground hover:text-foreground shrink-0"
-                        @click="
-                          whereFilterInput = '';
-                          applyWhereFilter();
-                        "
-                      >
+                      <button v-if="hasWhereFilterInput" class="text-muted-foreground hover:text-foreground shrink-0" @click="clearWhereFilterInput">
                         <X class="w-3 h-3" />
                       </button>
                     </div>
@@ -8290,37 +8326,33 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           <button class="data-grid-topbar-condition-icon-control pointer-events-auto text-muted-foreground hover:text-foreground shrink-0" type="button" @mousedown.prevent="openWhereHistoryMenu">
                             <ChevronDown class="w-3 h-3" />
                           </button>
-                          <button
-                            v-if="hasWhereFilterInput"
-                            class="data-grid-topbar-condition-icon-control pointer-events-auto text-muted-foreground hover:text-foreground shrink-0"
-                            @click="
-                              whereFilterInput = '';
-                              applyWhereFilter();
-                            "
-                          >
+                          <button v-if="hasWhereFilterInput" class="data-grid-topbar-condition-icon-control pointer-events-auto text-muted-foreground hover:text-foreground shrink-0" @click="clearWhereFilterInput">
                             <X class="w-3 h-3" />
                           </button>
                         </div>
                       </div>
                     </Teleport>
-                    <span ref="whereMeasureRef" class="data-grid-topbar-condition-measure invisible absolute left-0 top-0 whitespace-pre pointer-events-none" aria-hidden="true" />
                     <!-- WHERE suggestion dropdown -->
                     <Teleport to="body">
-                      <div v-if="showWhereSuggestionDropdown" class="fixed z-[90] min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-md" :style="whereSuggestionStyle">
+                      <div v-if="showWhereSuggestionDropdown" ref="whereSuggestionDropdownRef" class="fixed z-[90] min-w-[180px] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md" :style="whereSuggestionStyle">
                         <div
                           v-for="(sug, idx) in whereSuggestions"
                           :key="`${sug.kind}:${sug.value}`"
-                          class="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer"
+                          class="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs cursor-pointer"
                           :class="idx === whereSuggestionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-gray-200 dark:hover:bg-gray-800'"
                           @mousedown.prevent="
                             whereSuggestionIndex = idx;
                             acceptWhereSuggestion();
                           "
-                          @mouseenter="whereSuggestionIndex = idx"
+                          @mouseenter="
+                            whereSuggestionIndex = idx;
+                            sug.kind === 'history' ? showConditionHistoryPreview(sug.value, $event) : hideConditionHistoryPreview();
+                          "
+                          @mouseleave="hideConditionHistoryPreview"
                         >
                           <Search class="w-3 h-3 mr-2 text-muted-foreground shrink-0" />
-                          <span class="min-w-0 flex-1 truncate">{{ sug.value }}</span>
-                          <button v-if="sug.kind === 'history'" class="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" type="button" @mousedown.stop.prevent="deleteWhereHistorySuggestion(sug.value)">
+                          <span data-condition-history-text class="min-w-0 flex-1 truncate font-mono">{{ sug.value }}</span>
+                          <button v-if="sug.kind === 'history'" class="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" type="button" @mousedown.stop.prevent="deleteWhereHistorySuggestion(sug.value)">
                             <X class="h-3 w-3" />
                           </button>
                         </div>
@@ -8357,10 +8389,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           placeholder="ORDER BY"
                           @input="onOrderByInput"
                           @keydown="onOrderByKeydown"
-                          @focus="
-                            showOrderByHistorySuggestions();
-                            resizeConditionInput('orderBy');
-                          "
+                          @focus="resizeConditionInput('orderBy')"
                           @click="onConditionInputClick('orderBy')"
                           @wheel="onConditionInputWheel"
                           @blur="
@@ -8372,14 +8401,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                       <button class="text-muted-foreground hover:text-foreground shrink-0" type="button" @mousedown.prevent="openOrderByHistoryMenu">
                         <ChevronDown class="w-3 h-3" />
                       </button>
-                      <button
-                        v-if="hasOrderByInput"
-                        class="text-muted-foreground hover:text-foreground shrink-0"
-                        @click="
-                          orderByInput = '';
-                          applyOrderBySearch();
-                        "
-                      >
+                      <button v-if="hasOrderByInput" class="text-muted-foreground hover:text-foreground shrink-0" @click="clearOrderByInput">
                         <X class="w-3 h-3" />
                       </button>
                     </div>
@@ -8412,42 +8434,46 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           <button class="data-grid-topbar-condition-icon-control pointer-events-auto text-muted-foreground hover:text-foreground shrink-0" type="button" @mousedown.prevent="openOrderByHistoryMenu">
                             <ChevronDown class="w-3 h-3" />
                           </button>
-                          <button
-                            v-if="hasOrderByInput"
-                            class="data-grid-topbar-condition-icon-control pointer-events-auto text-muted-foreground hover:text-foreground shrink-0"
-                            @click="
-                              orderByInput = '';
-                              applyOrderBySearch();
-                            "
-                          >
+                          <button v-if="hasOrderByInput" class="data-grid-topbar-condition-icon-control pointer-events-auto text-muted-foreground hover:text-foreground shrink-0" @click="clearOrderByInput">
                             <X class="w-3 h-3" />
                           </button>
                         </div>
                       </div>
                     </Teleport>
-                    <span ref="orderByMeasureRef" class="data-grid-topbar-condition-measure invisible absolute left-0 top-0 whitespace-pre pointer-events-none" aria-hidden="true" />
                     <!-- ORDER BY suggestion dropdown -->
                     <Teleport to="body">
-                      <div v-if="showOrderBySuggestionDropdown" class="fixed z-[90] min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-md" :style="orderBySuggestionStyle">
+                      <div v-if="showOrderBySuggestionDropdown" ref="orderBySuggestionDropdownRef" class="fixed z-[90] min-w-[180px] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md" :style="orderBySuggestionStyle">
                         <div
                           v-for="(sug, idx) in orderBySuggestions"
                           :key="`${sug.kind}:${sug.value}`"
-                          class="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer"
+                          class="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs cursor-pointer"
                           :class="idx === orderBySuggestionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-gray-200 dark:hover:bg-gray-800'"
                           @mousedown.prevent="
                             orderBySuggestionIndex = idx;
                             acceptOrderBySuggestion();
                           "
-                          @mouseenter="orderBySuggestionIndex = idx"
+                          @mouseenter="
+                            orderBySuggestionIndex = idx;
+                            sug.kind === 'history' ? showConditionHistoryPreview(sug.value, $event) : hideConditionHistoryPreview();
+                          "
+                          @mouseleave="hideConditionHistoryPreview"
                         >
                           <Search class="w-3 h-3 mr-2 text-muted-foreground shrink-0" />
-                          <span class="min-w-0 flex-1 truncate">{{ sug.value }}</span>
-                          <button v-if="sug.kind === 'history'" class="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" type="button" @mousedown.stop.prevent="deleteOrderByHistorySuggestion(sug.value)">
+                          <span data-condition-history-text class="min-w-0 flex-1 truncate font-mono">{{ sug.value }}</span>
+                          <button v-if="sug.kind === 'history'" class="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" type="button" @mousedown.stop.prevent="deleteOrderByHistorySuggestion(sug.value)">
                             <X class="h-3 w-3" />
                           </button>
                         </div>
                         <div v-if="orderBySuggestions.length === 0" class="px-3 py-2 text-xs text-muted-foreground">
                           {{ orderByHistoryEmptyText }}
+                        </div>
+                      </div>
+                    </Teleport>
+                    <Teleport to="body">
+                      <div v-if="conditionHistoryPreview" class="pointer-events-none fixed z-[140] rounded-md bg-foreground shadow-xl" :style="conditionHistoryPreviewStyle">
+                        <span class="absolute h-3 w-3 rotate-45 bg-foreground" :class="conditionHistoryPreview.side === 'left' ? '-left-1.5' : '-right-1.5'" :style="conditionHistoryPreviewArrowStyle" />
+                        <div class="max-h-[min(320px,calc(100vh-16px))] overflow-auto rounded-md px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-background">
+                          {{ conditionHistoryPreview.value }}
                         </div>
                       </div>
                     </Teleport>
