@@ -3278,6 +3278,10 @@ const hasKnownTotalRowCount = computed(() => typeof serverKnownTotalRowCount.val
 // rowCount IS the total. Without this hint, the "page is full → assume more"
 // fallback in canGoNextDataGridPage lets the user keep clicking next forever.
 const allRowsLoaded = computed(() => isResultsContext.value && props.pageLimit === undefined);
+// True when the in-memory result already holds the complete result set (results
+// context, no server-side pagination, not truncated, no further pages). Used to
+// skip re-executing the query on export and instead write the local rows.
+const hasCompleteLocalResult = computed(() => !!props.result && allRowsLoaded.value && props.result.truncated !== true && props.result.has_more !== true);
 const canGoNextPage = computed(() => {
   return canGoNextDataGridPage({
     hasMore: props.result.has_more,
@@ -5827,6 +5831,8 @@ const {
   hasRowSelection,
   fullExportResult: props.fullExportResult,
   queryResultExportRequest: props.queryResultExportRequest,
+  hasCompleteLocalResult,
+  completeLocalResult: computed(() => (hasCompleteLocalResult.value ? props.result : undefined)),
   allExportResults: computed(() => props.allExportResults),
   currentResultLabel: computed(() => props.result.sourceLabel),
   exportFileBaseName: computed(() => props.exportFileBaseName),
