@@ -342,22 +342,22 @@ function clearContextTarget() {
 
 <template>
   <div class="h-full flex flex-col overflow-hidden">
-    <div class="flex items-center gap-px px-3 text-xs font-medium text-muted-foreground border-b bg-muted/20 h-10 shrink-0">
-      <span class="flex self-stretch items-center truncate">{{ t("sqlFileTree.title") }}</span>
-      <span class="flex-1 self-stretch" />
+    <div class="h-9 flex items-center gap-1 px-2 border-b shrink-0 bg-muted/20">
+      <span class="text-[13px] font-medium">{{ t("sqlFileTree.title") }}</span>
+      <span class="flex-1" />
       <LightTooltip v-if="folders.length > 0" :text="t('sqlFileTree.refreshAll')" side="bottom" :delay="0" :close-delay="0" nowrap>
         <Button variant="ghost" size="icon" class="h-5 w-5" @click="refreshAll">
-          <RefreshCw class="h-3.5 w-3.5" />
+          <RefreshCw class="h-3 w-3" />
         </Button>
       </LightTooltip>
       <LightTooltip :text="t('sqlFileTree.openFolder')" side="bottom" :delay="0" :close-delay="0" nowrap>
         <Button variant="ghost" size="icon" class="h-5 w-5" @click="pickFolder">
-          <FolderOpen class="h-3.5 w-3.5" />
+          <FolderOpen class="h-3 w-3" />
         </Button>
       </LightTooltip>
       <LightTooltip :text="t('sqlFileTree.closePanel')" side="bottom" :delay="0" :close-delay="0" nowrap>
         <Button variant="ghost" size="icon" class="h-5 w-5" @click="emit('close')">
-          <X class="h-3.5 w-3.5" />
+          <X class="h-3 w-3" />
         </Button>
       </LightTooltip>
     </div>
