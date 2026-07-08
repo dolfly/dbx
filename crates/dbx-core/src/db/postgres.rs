@@ -2124,20 +2124,23 @@ const POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL: &str = "SELECT c.column_name, \
              WHERE c.table_schema = $1 AND c.table_name = $2 \
              ORDER BY c.ordinal_position";
 
-fn column_info_from_row(row: &Row) -> ColumnInfo {
+fn column_info_from_row(row: &Row) -> Result<ColumnInfo, tokio_postgres::Error> {
     let full_type = row.try_get::<_, Option<String>>(1).ok().flatten().unwrap_or_default();
-    ColumnInfo {
-        name: row.get::<_, String>(0),
+    Ok(ColumnInfo {
+        // Postgres-compatible servers may expose catalog expression columns
+        // with unexpected type OIDs. Use try_get so metadata decoding can
+        // fall back instead of panicking under release panic=abort.
+        name: row.try_get::<_, String>(0)?,
         data_type: full_type,
-        is_nullable: row.get::<_, bool>(2),
+        is_nullable: row.try_get::<_, bool>(2)?,
         column_default: row.try_get::<_, Option<String>>(3).ok().flatten(),
-        is_primary_key: row.get::<_, bool>(4),
+        is_primary_key: row.try_get::<_, bool>(4)?,
         extra: row.try_get::<_, Option<String>>(6).ok().flatten(),
         comment: row.try_get::<_, Option<String>>(5).ok().flatten(),
         numeric_precision: row.try_get::<_, Option<i32>>(7).ok().flatten(),
         numeric_scale: row.try_get::<_, Option<i32>>(8).ok().flatten(),
         character_maximum_length: row.try_get::<_, Option<i32>>(9).ok().flatten(),
-    }
+    })
 }
 
 async fn get_columns_with_sql(
@@ -2148,7 +2151,7 @@ async fn get_columns_with_sql(
 ) -> Result<Vec<ColumnInfo>, tokio_postgres::Error> {
     let rows = postgres_query_cached(client, sql, &[&schema, &table]).await?;
 
-    Ok(rows.iter().map(column_info_from_row).collect())
+    rows.iter().map(column_info_from_row).collect()
 }
 
 pub async fn get_columns(pool: &Pool, schema: &str, table: &str) -> Result<Vec<ColumnInfo>, String> {
@@ -3628,6 +3631,34 @@ mod tests {
         assert!(POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL.contains("information_schema.key_column_usage"));
         assert!(!POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL.contains("pg_attribute"));
         assert!(!POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL.contains("regclass"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires DBX_TEST_POSTGRES_URL pointing at a writable PostgreSQL database"]
+    async fn postgres_column_metadata_decode_type_mismatch_returns_error() {
+        let url = std::env::var("DBX_TEST_POSTGRES_URL").expect("DBX_TEST_POSTGRES_URL");
+        let pool = connect(&url, std::time::Duration::from_secs(5)).await.expect("connect postgres");
+        let client =
+            checkout_postgres_client(&pool, None, std::time::Duration::from_secs(5)).await.expect("checkout postgres");
+        let row = client
+            .query_one(
+                "SELECT \
+                   1::int4 AS column_name, \
+                   'text'::text AS full_type, \
+                   'YES'::text AS is_nullable, \
+                   NULL::text AS column_default, \
+                   1::int4 AS is_pk, \
+                   NULL::text AS column_comment, \
+                   NULL::text AS column_extra, \
+                   NULL::int4 AS numeric_precision, \
+                   NULL::int4 AS numeric_scale, \
+                   NULL::int4 AS character_maximum_length",
+                &[],
+            )
+            .await
+            .expect("query mismatched metadata row");
+
+        assert!(column_info_from_row(&row).is_err());
     }
 
     #[test]
