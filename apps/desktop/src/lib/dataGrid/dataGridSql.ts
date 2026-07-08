@@ -4,6 +4,7 @@ import * as api from "@/lib/backend/api";
 export type GridCellValue = string | number | boolean | null | unknown[] | { [key: string]: unknown };
 
 export interface DataGridTableMeta {
+  catalog?: string;
   schema?: string;
   tableName: string;
   primaryKeys: string[];
@@ -76,6 +77,7 @@ export interface DataGridColumnValuesFilterConditionOptions {
 
 export interface DataGridColumnDistinctValuesSqlOptions {
   databaseType?: DatabaseType;
+  catalog?: string;
   schema?: string;
   tableName: string;
   columnName: string;
@@ -88,6 +90,7 @@ export interface DataGridColumnDistinctValuesSqlOptions {
 
 export interface DataGridCountSqlOptions {
   databaseType?: DatabaseType;
+  catalog?: string;
   schema?: string;
   tableName: string;
   whereInput?: string;

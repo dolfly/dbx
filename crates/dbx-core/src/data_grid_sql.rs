@@ -27,6 +27,8 @@ const DATA_GRID_COLUMN_DISTINCT_VALUES_MAX_LIMIT: usize = 1000;
 #[serde(rename_all = "camelCase")]
 pub struct DataGridTableMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
     pub table_name: String,
     #[serde(default)]
@@ -162,6 +164,8 @@ pub struct DataGridColumnDistinctValuesSqlOptions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database_type: Option<DatabaseType>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
     pub table_name: String,
     pub column_name: String,
@@ -182,6 +186,8 @@ pub struct DataGridColumnDistinctValuesSqlOptions {
 pub struct DataGridCountSqlOptions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database_type: Option<DatabaseType>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
     pub table_name: String,
@@ -259,8 +265,9 @@ pub fn build_data_grid_copy_update_statements(options: DataGridCopyUpdateStateme
         return Vec::new();
     }
 
-    let table = qualified_table_name(
+    let table = crate::sql_dialect::qualified_table_name_with_catalog(
         options.database_type,
+        options.table_meta.catalog.as_deref(),
         options.table_meta.schema.as_deref(),
         &options.table_meta.table_name,
     );
@@ -342,7 +349,14 @@ pub fn build_data_grid_copy_insert_statement(options: DataGridCopyInsertStatemen
 
     let table = options.table_meta.as_ref().map_or_else(
         || "table_name".to_string(),
-        |meta| qualified_table_name(options.database_type, meta.schema.as_deref(), &meta.table_name),
+        |meta| {
+            crate::sql_dialect::qualified_table_name_with_catalog(
+                options.database_type,
+                meta.catalog.as_deref(),
+                meta.schema.as_deref(),
+                &meta.table_name,
+            )
+        },
     );
     let columns = insert_columns
         .iter()
@@ -495,7 +509,12 @@ pub fn build_data_grid_column_distinct_values_sql(options: DataGridColumnDistinc
     }
 
     let limit = data_grid_column_distinct_values_limit(options.limit);
-    let table = qualified_table_name(options.database_type, options.schema.as_deref(), &options.table_name);
+    let table = crate::sql_dialect::qualified_table_name_with_catalog(
+        options.database_type,
+        options.catalog.as_deref(),
+        options.schema.as_deref(),
+        &options.table_name,
+    );
     let column = column_filter_ref(options.database_type, &options.column_name);
     let mut predicates = Vec::new();
     let predicate = crate::sql_dialect::normalize_where_input(options.where_input.as_deref());
@@ -541,7 +560,12 @@ pub fn build_data_grid_column_distinct_values_sql(options: DataGridColumnDistinc
 }
 
 pub fn build_data_grid_count_sql(options: DataGridCountSqlOptions) -> String {
-    let table = qualified_table_name(options.database_type, options.schema.as_deref(), &options.table_name);
+    let table = crate::sql_dialect::qualified_table_name_with_catalog(
+        options.database_type,
+        options.catalog.as_deref(),
+        options.schema.as_deref(),
+        &options.table_name,
+    );
     let predicate = crate::sql_dialect::normalize_where_input(options.where_input.as_deref());
     let where_clause = if predicate.is_empty() { String::new() } else { format!(" WHERE ({predicate})") };
     format!("SELECT COUNT(*) AS cnt FROM {table}{where_clause}")
@@ -747,8 +771,9 @@ fn build_data_grid_save_statements(options: &DataGridSaveStatementOptions) -> Ve
 
     let save_columns = effective_columns(options);
     let column_info = options.table_meta.columns.as_deref().unwrap_or(&[]);
-    let table = qualified_table_name(
+    let table = crate::sql_dialect::qualified_table_name_with_catalog(
         options.database_type,
+        options.table_meta.catalog.as_deref(),
         options.table_meta.schema.as_deref(),
         &options.table_meta.table_name,
     );
@@ -2050,6 +2075,7 @@ mod tests {
         let statements = build_data_grid_copy_update_statements(DataGridCopyUpdateStatementOptions {
             database_type: Some(DatabaseType::Postgres),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("public".to_string()),
                 table_name: "users".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2070,6 +2096,7 @@ mod tests {
         let statement = build_data_grid_copy_insert_statement(DataGridCopyInsertStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: Some(DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "users".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2092,6 +2119,7 @@ mod tests {
         let statement = build_data_grid_copy_insert_statement(DataGridCopyInsertStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: Some(DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "users".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2116,6 +2144,7 @@ mod tests {
         let statement = build_data_grid_copy_insert_statement(DataGridCopyInsertStatementOptions {
             database_type: Some(DatabaseType::Oracle),
             table_meta: Some(DataGridTableMeta {
+                catalog: None,
                 schema: Some("APP".to_string()),
                 table_name: "USERS".to_string(),
                 primary_keys: vec!["ID".to_string()],
@@ -2137,6 +2166,7 @@ mod tests {
     #[test]
     fn mysql_copy_statements_preserve_blob_hex_literals() {
         let table_meta = DataGridTableMeta {
+            catalog: None,
             schema: None,
             table_name: "reports".to_string(),
             primary_keys: vec!["id".to_string()],
@@ -2200,6 +2230,7 @@ mod tests {
         let statement = build_data_grid_copy_insert_statement(DataGridCopyInsertStatementOptions {
             database_type: Some(DatabaseType::Postgres),
             table_meta: Some(DataGridTableMeta {
+                catalog: None,
                 schema: Some("public".to_string()),
                 table_name: "articles".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2308,6 +2339,7 @@ mod tests {
         assert_eq!(
             build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
                 database_type: Some(DatabaseType::Postgres),
+                catalog: None,
                 schema: Some("public".to_string()),
                 table_name: "users".to_string(),
                 column_name: "status".to_string(),
@@ -2322,6 +2354,7 @@ mod tests {
         assert_eq!(
             build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
                 database_type: Some(DatabaseType::SqlServer),
+                catalog: None,
                 schema: None,
                 table_name: "users".to_string(),
                 column_name: "status".to_string(),
@@ -2336,6 +2369,7 @@ mod tests {
         assert_eq!(
             build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
                 database_type: Some(DatabaseType::SqlServer),
+                catalog: None,
                 schema: None,
                 table_name: "users".to_string(),
                 column_name: "id".to_string(),
@@ -2350,6 +2384,7 @@ mod tests {
         assert_eq!(
             build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
                 database_type: Some(DatabaseType::Oracle),
+                catalog: None,
                 schema: Some("APP".to_string()),
                 table_name: "EVENTS".to_string(),
                 column_name: "KIND".to_string(),
@@ -2364,6 +2399,7 @@ mod tests {
         assert_eq!(
             build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
                 database_type: Some(DatabaseType::Firebird),
+                catalog: None,
                 schema: None,
                 table_name: "USERS".to_string(),
                 column_name: "STATUS".to_string(),
@@ -2375,6 +2411,53 @@ mod tests {
             }),
             "SELECT \"STATUS\" AS dbx_value FROM \"USERS\" WHERE (DELETED_AT IS NULL) GROUP BY \"STATUS\" ORDER BY dbx_value ROWS 25"
         );
+        // Doris / StarRocks external-catalog tables are addressed with a 3-part name.
+        assert_eq!(
+            build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
+                database_type: Some(DatabaseType::Doris),
+                catalog: Some("iceberg_catalog".to_string()),
+                schema: Some("sales".to_string()),
+                table_name: "orders".to_string(),
+                column_name: "status".to_string(),
+                column_info: Some(column("status", "varchar", true, None)),
+                where_input: None,
+                search_value: None,
+                limit: Some(10),
+                include_counts: false,
+            }),
+            "SELECT `status` AS dbx_value FROM `iceberg_catalog`.`sales`.`orders` GROUP BY `status` ORDER BY dbx_value LIMIT 10"
+        );
+        assert_eq!(
+            build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
+                database_type: Some(DatabaseType::StarRocks),
+                catalog: Some("hive_catalog".to_string()),
+                schema: None,
+                table_name: "orders".to_string(),
+                column_name: "status".to_string(),
+                column_info: Some(column("status", "varchar", true, None)),
+                where_input: None,
+                search_value: None,
+                limit: Some(10),
+                include_counts: true,
+            }),
+            "SELECT `status` AS dbx_value, COUNT(*) AS dbx_count FROM `hive_catalog`.`orders` GROUP BY `status` ORDER BY dbx_count DESC, dbx_value LIMIT 10"
+        );
+        // The built-in `internal` catalog is never prefixed.
+        assert_eq!(
+            build_data_grid_column_distinct_values_sql(DataGridColumnDistinctValuesSqlOptions {
+                database_type: Some(DatabaseType::Doris),
+                catalog: Some("internal".to_string()),
+                schema: None,
+                table_name: "orders".to_string(),
+                column_name: "status".to_string(),
+                column_info: Some(column("status", "varchar", true, None)),
+                where_input: None,
+                search_value: None,
+                limit: Some(10),
+                include_counts: false,
+            }),
+            "SELECT `status` AS dbx_value FROM `orders` GROUP BY `status` ORDER BY dbx_value LIMIT 10"
+        );
     }
 
     #[test]
@@ -2382,11 +2465,32 @@ mod tests {
         assert_eq!(
             build_data_grid_count_sql(DataGridCountSqlOptions {
                 database_type: Some(DatabaseType::Postgres),
+                catalog: None,
                 schema: Some("public".to_string()),
                 table_name: "users".to_string(),
                 where_input: Some("WHERE active = true;".to_string()),
             }),
             "SELECT COUNT(*) AS cnt FROM \"public\".\"users\" WHERE (active = true)"
+        );
+        assert_eq!(
+            build_data_grid_count_sql(DataGridCountSqlOptions {
+                database_type: Some(DatabaseType::Doris),
+                catalog: Some("iceberg_catalog".to_string()),
+                schema: Some("sales".to_string()),
+                table_name: "orders".to_string(),
+                where_input: Some("WHERE active = true;".to_string()),
+            }),
+            "SELECT COUNT(*) AS cnt FROM `iceberg_catalog`.`sales`.`orders` WHERE (active = true)"
+        );
+        assert_eq!(
+            build_data_grid_count_sql(DataGridCountSqlOptions {
+                database_type: Some(DatabaseType::StarRocks),
+                catalog: Some("hive_catalog".to_string()),
+                schema: None,
+                table_name: "orders".to_string(),
+                where_input: None,
+            }),
+            "SELECT COUNT(*) AS cnt FROM `hive_catalog`.`orders`"
         );
     }
 
@@ -2523,6 +2627,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::SqlServer),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("dbo".to_string()),
                 table_name: "users".to_string(),
                 primary_keys: vec!["Id".to_string()],
@@ -2545,6 +2650,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Oracle),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("APP".to_string()),
                 table_name: "EVENTS".to_string(),
                 primary_keys: vec!["ID".to_string()],
@@ -2590,6 +2696,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::SqlServer),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("dbo".to_string()),
                 table_name: "flags".to_string(),
                 primary_keys: vec![],
@@ -2620,6 +2727,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "employees".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2646,6 +2754,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "employees".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2672,6 +2781,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "employees".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2698,6 +2808,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::SqlServer),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("game".to_string()),
                 table_name: "player states".to_string(),
                 primary_keys: vec!["role id".to_string()],
@@ -2726,6 +2837,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Databend),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "people".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2756,6 +2868,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::ClickHouse),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "people".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2788,6 +2901,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::ClickHouse),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "people".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2818,6 +2932,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::ClickHouse),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "events".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2844,6 +2959,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::ClickHouse),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "events".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2876,6 +2992,7 @@ mod tests {
         let statements = build_data_grid_copy_update_statements(DataGridCopyUpdateStatementOptions {
             database_type: Some(DatabaseType::ClickHouse),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "people".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -2890,10 +3007,68 @@ mod tests {
     }
 
     #[test]
+    fn doris_external_catalog_save_and_copy_statements_use_catalog_scope() {
+        let table_meta = DataGridTableMeta {
+            catalog: Some("iceberg_catalog".to_string()),
+            schema: Some("sales".to_string()),
+            table_name: "orders".to_string(),
+            primary_keys: vec!["id".to_string()],
+            columns: Some(vec![column("id", "bigint", false, None), column("status", "varchar", true, None)]),
+        };
+
+        let copy_updates = build_data_grid_copy_update_statements(DataGridCopyUpdateStatementOptions {
+            database_type: Some(DatabaseType::Doris),
+            table_meta: table_meta.clone(),
+            columns: vec!["id".to_string(), "status".to_string()],
+            source_columns: None,
+            rows: vec![vec![json!(1), json!("paid")]],
+        });
+        assert_eq!(
+            copy_updates,
+            vec!["UPDATE `iceberg_catalog`.`sales`.`orders` SET `status` = 'paid' WHERE `id` = 1;"]
+        );
+
+        let copy_insert = build_data_grid_copy_insert_statement(DataGridCopyInsertStatementOptions {
+            database_type: Some(DatabaseType::Doris),
+            table_meta: Some(table_meta.clone()),
+            columns: vec!["id".to_string(), "status".to_string()],
+            source_columns: None,
+            rows: vec![vec![json!(2), json!("new")]],
+            exclude_primary_keys: false,
+            insert_mode: DataGridCopyInsertMode::Merged,
+        });
+        assert_eq!(
+            copy_insert.as_deref(),
+            Some("INSERT INTO `iceberg_catalog`.`sales`.`orders` (`id`, `status`) VALUES (2, 'new');")
+        );
+
+        let save = prepare_data_grid_save(DataGridSaveStatementOptions {
+            database_type: Some(DatabaseType::Doris),
+            table_meta,
+            columns: vec!["id".to_string(), "status".to_string()],
+            source_columns: None,
+            rows: vec![vec![json!(1), json!("pending")], vec![json!(3), json!("cancelled")]],
+            dirty_rows: vec![(0, vec![(1, json!("paid"))])],
+            deleted_rows: vec![1],
+            new_rows: vec![vec![json!(4), json!("new")]],
+        });
+        assert_eq!(
+            save.statements,
+            vec![
+                "UPDATE `iceberg_catalog`.`sales`.`orders` SET `status` = 'paid' WHERE `id` = 1;",
+                "DELETE FROM `iceberg_catalog`.`sales`.`orders` WHERE `id` = 3;",
+                "INSERT INTO `iceberg_catalog`.`sales`.`orders` (`id`, `status`) VALUES (4, 'new');",
+            ]
+        );
+        assert!(save.validation_error.is_none());
+    }
+
+    #[test]
     fn prepares_databend_keyless_save_statements_with_row_predicate() {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Databend),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("default".to_string()),
                 table_name: "people".to_string(),
                 primary_keys: vec![],
@@ -2921,6 +3096,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Oscar),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("SYSDBA".to_string()),
                 table_name: "PEOPLE".to_string(),
                 primary_keys: vec![],
@@ -2948,6 +3124,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Postgres),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: Some("public".to_string()),
                 table_name: "ihli_data".to_string(),
                 primary_keys: vec!["iso3".to_string(), "year".to_string()],
@@ -2980,6 +3157,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "policies".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -3030,6 +3208,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "school".to_string(),
                 primary_keys: vec!["id".to_string()],
@@ -3054,6 +3233,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Mysql),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "parts".to_string(),
                 primary_keys: vec![],
@@ -3084,6 +3264,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::ManticoreSearch),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "rt_products".to_string(),
                 primary_keys: vec![],
@@ -3113,6 +3294,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Postgres),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "education_data".to_string(),
                 primary_keys: vec!["country_code".to_string(), "year".to_string()],
@@ -3149,6 +3331,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Sqlite),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "OnlineLogs".to_string(),
                 primary_keys: vec!["OnlineLogId".to_string()],
@@ -3174,6 +3357,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Sqlite),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "OnlineLogs".to_string(),
                 primary_keys: vec!["OnlineLogId".to_string()],
@@ -3202,6 +3386,7 @@ mod tests {
         let result = prepare_data_grid_save(DataGridSaveStatementOptions {
             database_type: Some(DatabaseType::Sqlite),
             table_meta: DataGridTableMeta {
+                catalog: None,
                 schema: None,
                 table_name: "OnlineLogs".to_string(),
                 primary_keys: vec!["OnlineLogId".to_string()],

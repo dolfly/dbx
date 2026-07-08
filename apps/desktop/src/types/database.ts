@@ -299,6 +299,14 @@ export interface LinkedServerInfo {
   data_source?: string | null;
 }
 
+/** A catalog exposed by a multi-catalog engine (Doris / StarRocks). */
+export interface CatalogInfo {
+  name: string;
+  catalog_type: string;
+  is_current: boolean;
+  comment?: string | null;
+}
+
 export interface TableInfo {
   name: string;
   table_type: string;
@@ -513,6 +521,7 @@ export type TreeNodeType =
   | "connection"
   | "connection-group"
   | "database"
+  | "doris-catalog"
   | "linked-server-root"
   | "linked-server"
   | "linked-server-catalog"
@@ -589,6 +598,8 @@ export interface TreeNode {
   pinned?: boolean;
   connectionId?: string;
   database?: string;
+  catalog?: string;
+  catalogType?: string;
   linkedServer?: string;
   linkedCatalog?: string;
   linkedSchema?: string;
@@ -714,6 +725,7 @@ export interface QueryTab {
     schema?: string;
     tableName: string;
     tableType?: string;
+    catalog?: string;
     columns: ColumnInfo[];
     primaryKeys: string[];
   };
