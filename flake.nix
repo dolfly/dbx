@@ -198,6 +198,7 @@
               pkgs.nodejs_22
               pkgs.pnpm
               pkgs.pkg-config
+              pkgs.perl
               pkgs.jq                         # used by preConfigure to strip packageManager
               pkgs.cargo-tauri               # tauri CLI — needed to properly embed frontend assets
               # Hooks that wire up the vendored deps automatically:
