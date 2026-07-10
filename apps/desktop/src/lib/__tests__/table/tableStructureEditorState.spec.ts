@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { combineDataTypeForDatabase, createColumnDrafts, dataTypeLengthInputValue, isDataTypeLengthDisabled, isMysqlCharacterDataType, isSqlServerIdentityCompatibleDataType, splitDataType } from "@/lib/table/tableStructureEditorState";
+import {
+  combineDataTypeForDatabase,
+  createColumnDrafts,
+  dataTypeLengthInputValue,
+  isDataTypeLengthDisabled,
+  isMysqlCharacterDataType,
+  isMysqlEnumDataType,
+  isSqlServerIdentityCompatibleDataType,
+  mysqlEnumDataType,
+  rehydrateColumnDraftsFromMetadata,
+  splitDataType,
+} from "@/lib/table/tableStructureEditorState";
 
 describe("tableStructureEditorState", () => {
   it("keeps mysql unsigned attributes in the editable base type", () => {
@@ -26,6 +37,55 @@ describe("tableStructureEditorState", () => {
     expect(isDataTypeLengthDisabled("mysql", "set")).toBe(true);
     expect(dataTypeLengthInputValue("mysql", dataType)).toBe("");
     expect(dataTypeLengthInputValue("mysql", "set('manual','auto')")).toBe("");
+  });
+
+  it("hydrates mysql enum values into an editable canonical type", () => {
+    const [draft] = createColumnDrafts(
+      [
+        {
+          name: "status",
+          data_type: "enum",
+          enum_values: ["", "pending", "it's", "path\\name"],
+          is_nullable: false,
+          column_default: "'pending'",
+          is_primary_key: false,
+          extra: null,
+        },
+      ],
+      "mysql",
+    );
+
+    expect(draft?.enumValues).toEqual(["", "pending", "it's", "path\\name"]);
+    expect(draft?.dataType).toBe("enum('','pending','it''s','path\\\\name')");
+    expect(draft?.original?.data_type).toBe(draft?.dataType);
+  });
+
+  it("builds mysql enum types without confusing values with length", () => {
+    expect(isMysqlEnumDataType("mysql", "ENUM('a','b')")).toBe(true);
+    expect(isMysqlEnumDataType("postgres", "enum")).toBe(false);
+    expect(mysqlEnumDataType(["", "a'b", "a\\b"])).toBe("enum('','a''b','a\\\\b')");
+  });
+
+  it("rehydrates enum values into drafts saved before enum editing existed", () => {
+    const metadata = {
+      name: "status",
+      data_type: "enum",
+      enum_values: ["pending", "active"],
+      is_nullable: false,
+      column_default: "'pending'",
+      is_primary_key: false,
+      extra: null,
+    };
+    const [legacyDraft] = createColumnDrafts([metadata], "mysql");
+    legacyDraft!.dataType = "enum";
+    legacyDraft!.enumValues = undefined;
+    legacyDraft!.original = { ...metadata };
+
+    const [rehydrated] = rehydrateColumnDraftsFromMetadata([legacyDraft!], [metadata], "mysql");
+
+    expect(rehydrated?.enumValues).toEqual(["pending", "active"]);
+    expect(rehydrated?.dataType).toBe("enum('pending','active')");
+    expect(rehydrated?.original?.data_type).toBe("enum('pending','active')");
   });
 
   it("does not expose Oracle-like integer display widths as editable length", () => {

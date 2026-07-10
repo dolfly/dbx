@@ -20,6 +20,7 @@ export interface EditableStructureColumn {
   id: string;
   name: string;
   dataType: string;
+  enumValues?: string[];
   isNullable: boolean;
   defaultValue: string;
   comment: string;

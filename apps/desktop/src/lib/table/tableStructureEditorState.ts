@@ -296,6 +296,16 @@ export function getDataTypeOptions(dbType: DatabaseType | undefined): string[] {
   return DATA_TYPE_OPTIONS[key] ?? [];
 }
 
+export function isMysqlEnumDataType(dbType: DatabaseType | undefined, dataType: string): boolean {
+  return dbType === "mysql" && splitDataType(dataType).baseType.trim().toLowerCase() === "enum";
+}
+
+export function mysqlEnumDataType(values: readonly string[]): string {
+  // Match MySQL's canonical ENUM literal escaping, including values returned by SHOW CREATE TABLE.
+  const literals = values.map((value) => `'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`);
+  return `enum(${literals.join(",")})`;
+}
+
 export interface ColumnEditorControls {
   length: boolean;
   nullable: boolean;
@@ -606,10 +616,13 @@ function columnDefaultForEditor(column: ColumnInfo, databaseType?: DatabaseType)
 export function createColumnDrafts(columns: ColumnInfo[], databaseType?: DatabaseType): EditableStructureColumn[] {
   return columns.map((column, index) => {
     const defaultValue = columnDefaultForEditor(column, databaseType);
+    const enumValues = isMysqlEnumDataType(databaseType, column.data_type) ? [...(column.enum_values ?? [])] : undefined;
+    const dataType = enumValues?.length ? mysqlEnumDataType(enumValues) : column.data_type;
     return {
       id: `existing:${column.name}`,
       name: column.name,
-      dataType: column.data_type,
+      dataType,
+      enumValues,
       isNullable: column.is_nullable,
       defaultValue,
       comment: column.comment ?? "",
@@ -617,7 +630,7 @@ export function createColumnDrafts(columns: ColumnInfo[], databaseType?: Databas
       characterSet: column.character_set ?? "",
       collation: column.collation ?? "",
       extra: parseExtraToColumnExtra(column.extra, databaseType),
-      original: { ...column, column_default: column.column_default === null ? null : defaultValue },
+      original: { ...column, data_type: dataType, column_default: column.column_default === null ? null : defaultValue },
       originalPosition: index,
       markedForDrop: false,
     };
@@ -674,12 +687,15 @@ export function rehydrateColumnDraftsFromMetadata(draftColumns: EditableStructur
     const metadataIndex = findColumnDraftByName(metadataDrafts, candidates, usedMetadataIndexes);
     if (metadataIndex === undefined) return column;
     usedMetadataIndexes.add(metadataIndex);
-    if (!needsHydration) return column;
-
     const metadataDraft = metadataDrafts[metadataIndex]!;
+    const shouldHydrateEnum = isMysqlEnumDataType(databaseType, column.dataType) && column.enumValues === undefined && metadataDraft.enumValues !== undefined;
+    if (!needsHydration && !shouldHydrateEnum) return column;
+
     return {
       ...column,
-      original: column.original ?? metadataDraft.original,
+      dataType: shouldHydrateEnum ? metadataDraft.dataType : column.dataType,
+      enumValues: column.enumValues ?? metadataDraft.enumValues,
+      original: shouldHydrateEnum ? metadataDraft.original : (column.original ?? metadataDraft.original),
       originalPosition: column.originalPosition ?? metadataDraft.originalPosition,
     };
   });

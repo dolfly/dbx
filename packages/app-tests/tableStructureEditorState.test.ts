@@ -13,7 +13,9 @@ import {
   getColumnEditorControls,
   getDataTypeOptions,
   isProtectedManticoreIdColumn,
+  isMysqlEnumDataType,
   isSqlServerIdentityCompatibleDataType,
+  mysqlEnumDataType,
   normalizeDataTypeParams,
   parseExtraToColumnExtra,
   rehydrateColumnDraftsFromMetadata,
@@ -290,6 +292,29 @@ test("does not add MySQL-style display widths to SQL Server integer types", () =
   assert.equal(combineDataTypeForDatabase("sqlserver", "decimal", "10,0"), "decimal(10,0)");
   assert.equal(combineDataTypeForDatabase("sqlserver", "varchar", "255"), "varchar(255)");
   assert.equal(combineDataTypeForDatabase("sqlserver", "float", "53"), "float(53)");
+});
+
+test("hydrates and serializes MySQL enum values for structure editing", () => {
+  const [draft] = createColumnDrafts(
+    [
+      {
+        name: "status",
+        data_type: "enum",
+        enum_values: ["", "pending", "it's", "path\\name"],
+        is_nullable: false,
+        column_default: "'pending'",
+        is_primary_key: false,
+        extra: null,
+      },
+    ],
+    "mysql",
+  );
+
+  assert.deepEqual(draft?.enumValues, ["", "pending", "it's", "path\\name"]);
+  assert.equal(draft?.dataType, "enum('','pending','it''s','path\\\\name')");
+  assert.equal(draft?.original?.data_type, draft?.dataType);
+  assert.equal(isMysqlEnumDataType("mysql", draft?.dataType ?? ""), true);
+  assert.equal(mysqlEnumDataType(["a'b", "a\\b"]), "enum('a''b','a\\\\b')");
 });
 
 test("parses Manticore Search text properties to ColumnExtra", () => {

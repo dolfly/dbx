@@ -90,7 +90,7 @@ import { createColumnDrafts } from "@/lib/table/tableStructureEditorState";
 import type { BuildSingleColumnAlterSqlOptions } from "@/lib/table/tableStructureEditorSql";
 import { buildTableSelectSql, quoteTableIdentifier } from "@/lib/table/tableSelectSql";
 import { uuid } from "@/lib/common/utils";
-import { resolveHeaderColumnType } from "@/lib/dataGrid/dataGridColumnType";
+import { compactHeaderColumnType, resolveHeaderColumnType } from "@/lib/dataGrid/dataGridColumnType";
 import { canEditExistingTableRows, canInsertTableRows, canUseKeylessRowPredicate, hiveTablePropertiesIndicateTransactional, isClickHouseExistingRowReadonlyColumn, isHiddenGridColumn, isTdengineExistingRowReadonlyColumn, usesSyntheticRowIdKey } from "@/lib/table/tableEditing";
 import { buildDataGridColumnDistinctValuesSql, buildDataGridContextFilterCondition, buildDataGridCountSql, buildHiveTablePropertiesSql, type DataGridContextFilterMode } from "@/lib/dataGrid/dataGridSql";
 import {
@@ -379,7 +379,7 @@ function headerColumnType(column: string, actualColIdx: number): string {
     resultColumnTypes: props.result.column_types,
     actualColIdx,
   });
-  return resolved ? shortTypeName(resolved) : "";
+  return resolved ? shortTypeName(compactHeaderColumnType(resolved)) : "";
 }
 
 function shortTypeName(t: string): string {
@@ -4124,6 +4124,11 @@ function isEnumGridColumnNullable(columnIndex: number): boolean {
   return tableColumnForGridColumn(columnIndex)?.is_nullable ?? false;
 }
 
+function isEnumEditorInitialNull(rowId: number | undefined, columnIndex: number): boolean {
+  if (rowId === undefined) return false;
+  return getRowItem(rowId)?.data[columnIndex] === null;
+}
+
 function cellEditInputModeForColumn(columnIndex: number): "decimal" | "numeric" | undefined {
   const dataType = normalizedColumnDataType(tableColumnForGridColumn(columnIndex));
   if (isIntegerColumnType(dataType)) return "numeric";
@@ -6752,8 +6757,8 @@ function deleteCurrentRow(): boolean {
   return true;
 }
 
-function commitGridEdit() {
-  void commitEditAndMaybeAutoSave().finally(() => nextTick(() => gridRef.value?.focus({ preventScroll: true })));
+function commitGridEdit(value?: string | null) {
+  void commitEditAndMaybeAutoSave(value === undefined ? undefined : { explicitValue: value }).finally(() => nextTick(() => gridRef.value?.focus({ preventScroll: true })));
 }
 
 async function commitEditFromCellBlur() {
@@ -9257,7 +9262,16 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           @cancel="cancelEdit"
                           @commit="commitGridEdit"
                         />
-                        <EnumCellEditor v-else-if="isEnumGridColumn(cell.valueIndex)" v-model="editValue" :values="enumValuesForGridColumn(cell.valueIndex)" :nullable="isEnumGridColumnNullable(cell.valueIndex)" cell-layout="transpose" @cancel="cancelEdit" @commit="commitGridEdit" />
+                        <EnumCellEditor
+                          v-else-if="isEnumGridColumn(cell.valueIndex)"
+                          v-model="editValue"
+                          :values="enumValuesForGridColumn(cell.valueIndex)"
+                          :nullable="isEnumGridColumnNullable(cell.valueIndex)"
+                          :initial-null="isEnumEditorInitialNull(displayItems[cell.recordIndex]?.id, cell.valueIndex)"
+                          cell-layout="transpose"
+                          @cancel="cancelEdit"
+                          @commit="commitGridEdit"
+                        />
                         <textarea
                           v-else-if="cellUsesExpandedEditor(displayItems[cell.recordIndex]?.id, cell.valueIndex)"
                           v-model="editValue"
@@ -9744,6 +9758,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                         v-model="editValue"
                         :values="enumValuesForGridColumn(canvasEditingCell.actualColIdx)"
                         :nullable="isEnumGridColumnNullable(canvasEditingCell.actualColIdx)"
+                        :initial-null="isEnumEditorInitialNull(canvasEditingCell.rowId, canvasEditingCell.actualColIdx)"
                         @cancel="cancelEdit"
                         @commit="commitGridEdit"
                       />
@@ -9889,7 +9904,15 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                           @cancel="cancelEdit"
                           @commit="commitGridEdit"
                         />
-                        <EnumCellEditor v-else-if="isEnumGridColumn(col.actualColIdx)" v-model="editValue" :values="enumValuesForGridColumn(col.actualColIdx)" :nullable="isEnumGridColumnNullable(col.actualColIdx)" @cancel="cancelEdit" @commit="commitGridEdit" />
+                        <EnumCellEditor
+                          v-else-if="isEnumGridColumn(col.actualColIdx)"
+                          v-model="editValue"
+                          :values="enumValuesForGridColumn(col.actualColIdx)"
+                          :nullable="isEnumGridColumnNullable(col.actualColIdx)"
+                          :initial-null="isEnumEditorInitialNull(item.id, col.actualColIdx)"
+                          @cancel="cancelEdit"
+                          @commit="commitGridEdit"
+                        />
                         <textarea
                           v-else-if="cellUsesExpandedEditor(item.id, col.actualColIdx)"
                           v-model="editValue"

@@ -45,9 +45,11 @@ import {
   getDataTypeOptions,
   getDefaultLengthForType,
   isDataTypeLengthDisabled,
+  isMysqlEnumDataType,
   isMysqlCharacterDataType,
   isProtectedManticoreIdColumn,
   isSqlServerIdentityCompatibleDataType,
+  mysqlEnumDataType,
   parseExtraToColumnExtra,
   rehydrateColumnDraftsFromMetadata,
   splitDataType,
@@ -1247,6 +1249,7 @@ async function addColumn() {
     id: `new:${uuid()}`,
     name: "",
     dataType,
+    enumValues: [],
     isNullable: true,
     defaultValue: "",
     comment: "",
@@ -1377,13 +1380,36 @@ function updateSqlServerIdentityIncrement(column: EditableStructureColumn, value
 }
 
 function updateColumnDataType(column: EditableStructureColumn, baseType: string) {
-  column.dataType = combineDataTypeForDatabase(databaseType.value, baseType, getDefaultLengthForType(databaseType.value, baseType));
+  if (isMysqlEnumDataType(databaseType.value, baseType)) {
+    if (!column.enumValues?.length) column.enumValues = [""];
+    column.dataType = mysqlEnumDataType(column.enumValues);
+  } else {
+    column.dataType = combineDataTypeForDatabase(databaseType.value, baseType, getDefaultLengthForType(databaseType.value, baseType));
+  }
   syncSqlServerIdentityForDataType(column);
   // Clear charset/collation when switching to a non-character MySQL type
   if (showCharacterSet.value && !isMysqlCharacterDataType(column.dataType)) {
     column.characterSet = "";
     column.collation = "";
   }
+}
+
+function updateMysqlEnumValue(column: EditableStructureColumn, index: number, value: string | number) {
+  if (!column.enumValues || index < 0 || index >= column.enumValues.length) return;
+  column.enumValues[index] = String(value);
+  column.dataType = mysqlEnumDataType(column.enumValues);
+}
+
+function addMysqlEnumValue(column: EditableStructureColumn) {
+  column.enumValues ??= [];
+  column.enumValues.push("");
+  column.dataType = mysqlEnumDataType(column.enumValues);
+}
+
+function removeMysqlEnumValue(column: EditableStructureColumn, index: number) {
+  if (!column.enumValues || column.enumValues.length <= 1) return;
+  column.enumValues.splice(index, 1);
+  column.dataType = mysqlEnumDataType(column.enumValues);
 }
 
 function updateColumnDataTypeLength(column: EditableStructureColumn, value: string | number) {
@@ -2385,7 +2411,32 @@ watch(activeTab, (tab) => {
                     <Input v-else :model-value="splitDataType(column.dataType).baseType" :class="[structureMonoControlClass, 'w-full']" disabled />
                   </td>
                   <td v-if="columnEditorControls.length" :class="structureCellClass">
-                    <Input :model-value="dataTypeLengthInputValue(databaseType, column.dataType)" :class="structureMonoControlClass" :disabled="isColumnLengthDisabled(column)" @update:model-value="updateColumnDataTypeLength(column, $event)" />
+                    <Popover v-if="isMysqlEnumDataType(databaseType, column.dataType)">
+                      <PopoverTrigger as-child>
+                        <Button variant="outline" size="sm" :class="[structureMonoControlClass, 'w-full justify-between px-2']" :disabled="isColumnTypeDisabled(column)">
+                          <span>{{ t("structureEditor.enumValueCount", { count: column.enumValues?.length ?? 0 }) }}</span>
+                          <ListChevronsUpDown :class="structureIconClass" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent class="w-80 p-3" align="start">
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                          <span class="text-sm font-medium">{{ t("structureEditor.enumValues") }}</span>
+                          <Button variant="outline" size="sm" class="h-7 px-2" @click="addMysqlEnumValue(column)">
+                            <Plus class="mr-1 h-3.5 w-3.5" />
+                            {{ t("structureEditor.addEnumValue") }}
+                          </Button>
+                        </div>
+                        <div class="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                          <div v-for="(value, valueIndex) in column.enumValues" :key="valueIndex" class="flex items-center gap-1.5">
+                            <Input :model-value="value" :class="structureMonoControlClass" :placeholder="t('structureEditor.enumValuePlaceholder')" @update:model-value="updateMysqlEnumValue(column, valueIndex, $event)" />
+                            <Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" :disabled="(column.enumValues?.length ?? 0) <= 1" :title="t('structureEditor.removeEnumValue')" @click="removeMysqlEnumValue(column, valueIndex)">
+                              <Trash2 class="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <Input v-else :model-value="dataTypeLengthInputValue(databaseType, column.dataType)" :class="structureMonoControlClass" :disabled="isColumnLengthDisabled(column)" @update:model-value="updateColumnDataTypeLength(column, $event)" />
                   </td>
                   <td v-if="columnEditorControls.nullable" :class="structureCellClass">
                     <label class="flex items-center gap-1.5">
