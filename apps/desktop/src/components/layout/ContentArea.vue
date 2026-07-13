@@ -192,6 +192,7 @@ const columnInfoLoading = ref(false);
 const columnInfoError = ref<string | undefined>(undefined);
 const dataGridRef = ref<DataGridHandle>();
 const queryEditorRef = ref<InstanceType<typeof QueryEditor>>();
+const tableStructureEditorRef = ref<{ applyChanges: () => Promise<boolean> }>();
 const standaloneResultToolbarRef = ref<HTMLElement | null>(null);
 const standaloneResultToolbarWidth = ref(0);
 const resultTabsScrollerRef = ref<HTMLElement | null>(null);
@@ -754,7 +755,11 @@ function pasteClipboardAsSqlInCondition() {
   return queryEditorRef.value?.pasteClipboardAsSqlInCondition();
 }
 
-defineExpose({ focusSearch, refreshData, handleModRTarget, requestQueryEditorExecute, pasteClipboardAsSqlInCondition });
+function applyTableStructureChanges() {
+  return tableStructureEditorRef.value?.applyChanges() ?? Promise.resolve(false);
+}
+
+defineExpose({ focusSearch, refreshData, handleModRTarget, requestQueryEditorExecute, pasteClipboardAsSqlInCondition, applyTableStructureChanges });
 </script>
 
 <template>
@@ -1559,6 +1564,7 @@ defineExpose({ focusSearch, refreshData, handleModRTarget, requestQueryEditorExe
     <!-- Structure mode: table structure editor -->
     <template v-else-if="activeTab.mode === 'structure'">
       <TableStructureEditor
+        ref="tableStructureEditorRef"
         :key="activeTab.id"
         :connection-id="activeTab.connectionId"
         :database="activeTab.database"

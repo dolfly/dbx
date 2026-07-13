@@ -692,6 +692,7 @@ export interface TableStructureEditorTarget {
 }
 
 export interface TableStructureEditorDraft {
+  dirty?: boolean;
   activeTab: TableInfoTab;
   newTableName: string;
   tableComment: string;

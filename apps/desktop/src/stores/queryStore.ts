@@ -1204,6 +1204,10 @@ export const useQueryStore = defineStore("query", () => {
   }
 
   function isTabDirty(tab: QueryTab): boolean {
+    if (tab.mode === "structure") {
+      // Legacy persisted structure drafts predate the dirty flag; treat them as dirty until the editor rehydrates them.
+      return !!tab.structureDraft && tab.structureDraft.dirty !== false;
+    }
     if (tab.mode !== "query") return false;
     if (!tab.externalSqlPath && !tab.sql.trim()) return false;
     const original = tab.originalSql;
@@ -1269,7 +1273,12 @@ export const useQueryStore = defineStore("query", () => {
 
   function discardTabChanges(id: string) {
     const tab = tabs.value.find((item) => item.id === id);
-    if (!tab || tab.mode !== "query") return false;
+    if (!tab) return false;
+    if (tab.mode === "structure") {
+      tab.structureDraft = undefined;
+      return true;
+    }
+    if (tab.mode !== "query") return false;
     if (tab.originalSql !== undefined) {
       tab.sql = tab.originalSql;
       return true;
@@ -1303,9 +1312,9 @@ export const useQueryStore = defineStore("query", () => {
       return;
     }
 
-    const dirtyTab = shouldConfirmUnsavedSqlClose.value ? remainingIds.map((id) => tabs.value.find((tab) => tab.id === id)).find((tab): tab is QueryTab => !!tab && isTabDirty(tab)) : undefined;
+    const dirtyTab = remainingIds.map((id) => tabs.value.find((tab) => tab.id === id)).find((tab): tab is QueryTab => !!tab && shouldConfirmTabClose(tab));
     if (dirtyTab) {
-      // Batch close must pause before dropping dirty query tabs so the existing save/discard dialog can protect unsaved SQL.
+      // Batch close must pause before dropping dirty tabs so the shared save/discard dialog protects every editable surface.
       showDirtyTabCloseConfirm(dirtyTab, "batch");
       return;
     }
@@ -1332,7 +1341,7 @@ export const useQueryStore = defineStore("query", () => {
   function closeTab(id: string, { force = false }: { force?: boolean } = {}) {
     const tab = tabs.value.find((t) => t.id === id);
     if (!tab) return;
-    if (!force && shouldConfirmUnsavedSqlClose.value && isTabDirty(tab)) {
+    if (!force && shouldConfirmTabClose(tab)) {
       showDirtyTabCloseConfirm(tab, "tab");
       return;
     }
@@ -1353,6 +1362,11 @@ export const useQueryStore = defineStore("query", () => {
       activeTabId.value = fallbackActiveTabAfterClose(id, idx);
     }
     if (force) resumePendingBatchCloseAfter(id);
+  }
+
+  function shouldConfirmTabClose(tab: QueryTab): boolean {
+    if (tab.mode === "structure") return isTabDirty(tab);
+    return shouldConfirmUnsavedSqlClose.value && isTabDirty(tab);
   }
 
   function forceClosePendingTab() {
@@ -1500,8 +1514,7 @@ export const useQueryStore = defineStore("query", () => {
   }
 
   function requestAppCloseConfirmation() {
-    if (!shouldConfirmUnsavedSqlClose.value) return false;
-    const dirtyTab = tabs.value.find((tab) => isTabDirty(tab));
+    const dirtyTab = tabs.value.find((tab) => shouldConfirmTabClose(tab));
     if (!dirtyTab) return false;
     isConfirmingAppClose.value = true;
     showDirtyTabCloseConfirm(dirtyTab, "app");
