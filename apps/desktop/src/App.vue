@@ -926,13 +926,8 @@ async function saveActiveSqlAsLocalFile() {
   const tab = activeTab.value;
   if (!tab || !canSaveSqlTab(tab) || !isTauriRuntime()) return;
   try {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const path = await save({
-      defaultPath: defaultSavedSqlName(tab.title),
-      filters: [{ name: "SQL", extensions: ["sql"] }],
-    });
+    const path = await api.saveExternalSqlFile(defaultSavedSqlName(tab.title), tab.sql);
     if (!path) return;
-    await api.writeExternalSqlFile(path, tab.sql);
     queryStore.linkExternalSqlPath(tab.id, path, sqlFileTitleFromPath(path));
     showSaveSqlDialog.value = false;
     closePendingSavedTab();

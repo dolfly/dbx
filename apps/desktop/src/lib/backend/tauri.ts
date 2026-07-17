@@ -613,6 +613,10 @@ export async function writeExternalSqlFile(path: string, content: string): Promi
   return invoke("write_external_sql_file", { path, content });
 }
 
+export async function saveExternalSqlFile(defaultFileName: string, content: string): Promise<string | null> {
+  return invoke("save_external_sql_file", { defaultFileName, content });
+}
+
 export interface SqlFileEntry {
   name: string;
   path: string;

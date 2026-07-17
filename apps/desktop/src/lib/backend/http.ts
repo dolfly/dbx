@@ -1430,6 +1430,10 @@ export async function writeExternalSqlFile(_path: string, _content: string): Pro
   throw new Error("Saving external SQL file paths is only available in the desktop app");
 }
 
+export async function saveExternalSqlFile(_defaultFileName: string, _content: string): Promise<string | null> {
+  throw new Error("Saving SQL files locally is only available in the desktop app");
+}
+
 export interface SqlFileEntry {
   name: string;
   path: string;
