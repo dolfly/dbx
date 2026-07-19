@@ -31,6 +31,8 @@ pub struct DatabaseExportRequest {
     pub file_path: String,
     #[serde(default)]
     pub selected_tables: Vec<String>,
+    #[serde(default)]
+    pub excluded_tables: Vec<String>,
     pub include_structure: bool,
     pub include_data: bool,
     pub include_objects: bool,
@@ -891,6 +893,7 @@ async fn list_postgres_export_sequences(
     pool_key: &str,
     schema: &str,
     selected_tables: &[String],
+    excluded_tables: &[String],
     include_objects: bool,
     fail_on_error: bool,
 ) -> Result<Vec<PostgresExportSequence>, String> {
@@ -932,6 +935,7 @@ async fn list_postgres_export_sequences(
         .map_err(|e| e.to_string())?;
 
     let selected: HashSet<&str> = selected_tables.iter().map(String::as_str).collect();
+    let excluded: HashSet<&str> = excluded_tables.iter().map(String::as_str).collect();
     let mut sequences = rows
         .iter()
         .map(|row| PostgresExportSequence {
@@ -948,8 +952,9 @@ async fn list_postgres_export_sequences(
             owner_column: row.get::<_, Option<String>>(9),
         })
         .filter(|sequence| {
-            selected.is_empty()
-                || sequence.owner_table.as_deref().map(|owner_table| selected.contains(owner_table)).unwrap_or(false)
+            sequence.owner_table.as_deref().is_none_or(|owner_table| !excluded.contains(owner_table))
+                && (selected.is_empty()
+                    || sequence.owner_table.as_deref().is_some_and(|owner_table| selected.contains(owner_table)))
         })
         .filter(|sequence| sequence.owner_table.is_some() || (include_objects && selected.is_empty()))
         .collect::<Vec<_>>();
@@ -1139,7 +1144,7 @@ pub async fn export_database_sql_core(
         None,
     )
     .await?;
-    let all_tables = filter_selected_table_infos(all_tables, &request.selected_tables);
+    let all_tables = filter_export_table_infos(all_tables, &request.selected_tables, &request.excluded_tables);
 
     // 4. Create file
     let mut file = std::fs::File::create(&request.file_path).map_err(|e| format!("Failed to write file: {e}"))?;
@@ -1165,6 +1170,7 @@ pub async fn export_database_sql_core(
             &pool_key,
             &request.schema,
             &request.selected_tables,
+            &request.excluded_tables,
             request.include_objects,
             request.fail_on_error,
         )
@@ -1783,15 +1789,18 @@ pub async fn export_database_sql_core(
     Ok(())
 }
 
-fn filter_selected_table_infos(
+fn filter_export_table_infos(
     tables: Vec<crate::types::TableInfo>,
     selected_tables: &[String],
+    excluded_tables: &[String],
 ) -> Vec<crate::types::TableInfo> {
-    if selected_tables.is_empty() {
-        return tables;
-    }
     let selected: HashSet<&str> = selected_tables.iter().map(String::as_str).collect();
-    tables.into_iter().filter(|table| selected.contains(table.name.as_str())).collect()
+    let excluded: HashSet<&str> = excluded_tables.iter().map(String::as_str).collect();
+    tables
+        .into_iter()
+        .filter(|table| selected.is_empty() || selected.contains(table.name.as_str()))
+        .filter(|table| !excluded.contains(table.name.as_str()))
+        .collect()
 }
 
 fn drop_table_if_exists_sql(table_name: &str, schema: &str, db_type: &DatabaseType) -> String {
@@ -1802,11 +1811,11 @@ fn drop_table_if_exists_sql(table_name: &str, schema: &str, db_type: &DatabaseTy
 mod tests {
     use super::concurrent_metadata_prefetch_allowed;
     use super::{
-        build_database_sql_export, build_export_insert_statements, drop_table_if_exists_sql,
-        filter_selected_table_infos, format_export_sql_literal, generate_postgres_sequence_create_ddl,
-        generate_postgres_sequence_owner_ddl, generate_postgres_sequence_setval_sql, normalize_export_table_ddl,
-        record_export_error, BuildDatabaseSqlExportOptions, BuildExportInsertStatementsOptions, ExportedTableSql,
-        PostgresExportSequence, DATABASE_EXPORT_INSERT_BATCH_SIZE, DATABASE_EXPORT_ROW_LIMIT,
+        build_database_sql_export, build_export_insert_statements, drop_table_if_exists_sql, filter_export_table_infos,
+        format_export_sql_literal, generate_postgres_sequence_create_ddl, generate_postgres_sequence_owner_ddl,
+        generate_postgres_sequence_setval_sql, normalize_export_table_ddl, record_export_error,
+        BuildDatabaseSqlExportOptions, BuildExportInsertStatementsOptions, ExportedTableSql, PostgresExportSequence,
+        DATABASE_EXPORT_INSERT_BATCH_SIZE, DATABASE_EXPORT_ROW_LIMIT,
     };
     use crate::models::connection::DatabaseType;
     use crate::types::TableInfo;
@@ -1848,7 +1857,7 @@ mod tests {
     fn filters_export_tables_by_selected_names() {
         let tables = vec![table("users", "TABLE"), table("orders", "TABLE"), table("active_users", "VIEW")];
 
-        let filtered = filter_selected_table_infos(tables, &["active_users".to_string(), "users".to_string()]);
+        let filtered = filter_export_table_infos(tables, &["active_users".to_string(), "users".to_string()], &[]);
 
         assert_eq!(filtered.iter().map(|table| table.name.as_str()).collect::<Vec<_>>(), vec!["users", "active_users"]);
     }
@@ -1857,9 +1866,28 @@ mod tests {
     fn keeps_all_export_tables_when_selection_is_empty() {
         let tables = vec![table("users", "TABLE"), table("orders", "TABLE")];
 
-        let filtered = filter_selected_table_infos(tables.clone(), &[]);
+        let filtered = filter_export_table_infos(tables.clone(), &[], &[]);
 
         assert_eq!(filtered.iter().map(|table| table.name.as_str()).collect::<Vec<_>>(), vec!["users", "orders"]);
+    }
+
+    #[test]
+    fn excludes_export_tables_by_name() {
+        let tables = vec![table("users", "TABLE"), table("audit_log", "TABLE"), table("active_users", "VIEW")];
+
+        let filtered = filter_export_table_infos(tables, &[], &["audit_log".to_string(), "active_users".to_string()]);
+
+        assert_eq!(filtered.iter().map(|table| table.name.as_str()).collect::<Vec<_>>(), vec!["users"]);
+    }
+
+    #[test]
+    fn exclusions_take_precedence_over_selected_tables() {
+        let tables = vec![table("users", "TABLE"), table("orders", "TABLE")];
+
+        let filtered =
+            filter_export_table_infos(tables, &["users".to_string(), "orders".to_string()], &["orders".to_string()]);
+
+        assert_eq!(filtered.iter().map(|table| table.name.as_str()).collect::<Vec<_>>(), vec!["users"]);
     }
 
     #[test]

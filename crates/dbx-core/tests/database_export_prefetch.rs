@@ -172,6 +172,7 @@ async fn database_export_writes_structure_and_data_for_all_tables() {
         schema: "public".to_string(),
         file_path: file_path.to_string_lossy().to_string(),
         selected_tables: Vec::new(),
+        excluded_tables: Vec::new(),
         include_structure: true,
         include_data: true,
         include_objects: false,
