@@ -3243,6 +3243,53 @@ pub async fn list_extensions(pool: &Pool, schema: &str) -> Result<Vec<ExtensionI
         .collect())
 }
 
+fn list_extension_member_objects_sql() -> &'static str {
+    "SELECT 'RELATION'::text AS object_kind, c.relname, ''::text AS signature \
+     FROM pg_catalog.pg_class c \
+     JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+     WHERE n.nspname = $1 \
+       AND EXISTS ( \
+         SELECT 1 FROM pg_catalog.pg_depend d \
+         WHERE d.classid = 'pg_catalog.pg_class'::regclass \
+           AND d.objid = c.oid \
+           AND d.refclassid = 'pg_catalog.pg_extension'::regclass \
+           AND d.deptype = 'e' \
+       ) \
+     UNION ALL \
+     SELECT 'FUNCTION'::text, p.proname, pg_get_function_identity_arguments(p.oid) \
+     FROM pg_catalog.pg_proc p \
+     JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace \
+     WHERE n.nspname = $1 \
+       AND EXISTS ( \
+         SELECT 1 FROM pg_catalog.pg_depend d \
+         WHERE d.classid = 'pg_catalog.pg_proc'::regclass \
+           AND d.objid = p.oid \
+           AND d.refclassid = 'pg_catalog.pg_extension'::regclass \
+           AND d.deptype = 'e' \
+       )"
+}
+
+pub async fn list_extension_member_objects(pool: &Pool, schema: &str) -> Result<Vec<(String, String, String)>, String> {
+    let client = checkout_postgres_client(pool, None, super::connection_timeout()).await?;
+    let rows = match postgres_query_cached(&client, list_extension_member_objects_sql(), &[&schema]).await {
+        Ok(rows) => rows,
+        Err(primary_error) => {
+            // PostgreSQL-compatible servers before the identity-argument
+            // formatter can still be filtered using their legacy formatter.
+            let fallback_sql = list_extension_member_objects_sql()
+                .replace("pg_get_function_identity_arguments(p.oid)", "pg_get_function_arguments(p.oid)");
+            postgres_query_cached(&client, &fallback_sql, &[&schema])
+                .await
+                .map_err(|fallback_error| format!("{primary_error}; legacy fallback failed: {fallback_error}"))?
+        }
+    };
+
+    Ok(rows
+        .iter()
+        .map(|row| (pg_row_try_string(row, 0), pg_row_try_string(row, 1), pg_row_try_string(row, 2)))
+        .collect())
+}
+
 pub async fn list_available_extensions(pool: &Pool) -> Result<Vec<ExtensionInfo>, String> {
     let client = checkout_postgres_client(pool, None, super::connection_timeout()).await?;
     let rows = postgres_query_cached(
@@ -3970,6 +4017,18 @@ mod tests {
         assert!(POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL.contains("NULL::text AS enum_values"));
         assert!(!POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL.contains("pg_attribute"));
         assert!(!POSTGRES_COLUMNS_INFORMATION_SCHEMA_SQL.contains("regclass"));
+    }
+
+    #[test]
+    fn extension_member_query_filters_only_owned_relations_and_routines() {
+        let sql = list_extension_member_objects_sql();
+
+        assert!(sql.contains("d.classid = 'pg_catalog.pg_class'::regclass"));
+        assert!(sql.contains("d.classid = 'pg_catalog.pg_proc'::regclass"));
+        assert!(sql.contains("d.refclassid = 'pg_catalog.pg_extension'::regclass"));
+        assert!(sql.contains("d.deptype = 'e'"));
+        assert!(sql.contains("pg_get_function_identity_arguments(p.oid)"));
+        assert!(!sql.contains("d.deptype = 'x'"));
     }
 
     #[tokio::test]
