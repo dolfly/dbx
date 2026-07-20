@@ -168,6 +168,30 @@ class KingbaseAgentTest extends JdbcFakeExecutionBehaviorTest {
     }
 
     @Test
+    void postgresCompatModePreservesMaterializedViews() throws Exception {
+        List<String> sql = new ArrayList<>();
+        KingbaseAgent agent = new KingbaseAgent();
+        Connection connection = postgresCatalogConnection(sql, resultSet(
+            new String[]{"table_name", "table_type", "table_comment"},
+            new Object[][]{{"orders", "TABLE", null}, {"order_summary", "MATERIALIZED VIEW", "cached orders"}}
+        ));
+
+        Method afterConnect = KingbaseAgent.class.getDeclaredMethod("afterConnect", ConnectParams.class, Connection.class);
+        afterConnect.setAccessible(true);
+        afterConnect.invoke(agent, new ConnectParams(), connection);
+        TestSupport.setPrivateConnection(agent, connection);
+
+        List<TableInfo> tables = agent.listTables("public");
+
+        Assertions.assertEquals(2, tables.size());
+        Assertions.assertEquals("MATERIALIZED VIEW", tables.get(1).getTable_type());
+        Assertions.assertEquals("SELECT 1 FROM sys_catalog.sys_namespace WHERE 1 = 0", sql.get(0));
+        Assertions.assertEquals("SELECT 1 FROM pg_catalog.pg_namespace WHERE 1 = 0", sql.get(1));
+        Assertions.assertTrue(sql.get(2).contains("FROM pg_catalog.pg_class c"), sql.get(2));
+        Assertions.assertTrue(sql.get(2).contains("c.relkind IN ('r','p','v','m','f')"), sql.get(2));
+    }
+
+    @Test
     void detectsMysqlCompatModeFromServerDatabaseMode() throws Exception {
         List<String> sql = new ArrayList<>();
         KingbaseAgent agent = new KingbaseAgent();
@@ -331,12 +355,30 @@ class KingbaseAgentTest extends JdbcFakeExecutionBehaviorTest {
         Assertions.assertEquals("TABLE", tables.get(0).getTable_type());
         Assertions.assertEquals("app_view", tables.get(1).getName());
         Assertions.assertEquals("VIEW", tables.get(1).getTable_type());
-        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_class"), sql.get(0));
-        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_rewrite"), sql.get(0));
-        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_index"), sql.get(0));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_class c"), sql.get(0));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_tables t"), sql.get(0));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_foreign_table ft"), sql.get(0));
         Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_views"), sql.get(0));
         Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_matviews"), sql.get(0));
         Assertions.assertFalse(sql.get(0).contains("relkind"), sql.get(0));
+    }
+
+    @Test
+    void regularTableDiscoveryExcludesCompositeTypesWithPositiveTableCatalog() {
+        List<String> sql = new ArrayList<>();
+        KingbaseAgent agent = new KingbaseAgent();
+        TestSupport.setPrivateConnection(agent, compositeAwareTableConnection(sql));
+
+        List<TableInfo> tables = agent.listTables("public", new MetadataListConstraints(null, null, null, List.of("TABLE")));
+
+        Assertions.assertEquals(1, tables.size());
+        Assertions.assertEquals("orders", tables.get(0).getName());
+        Assertions.assertFalse(tables.stream().anyMatch(table -> "address_type".equals(table.getName())));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_tables t"), sql.get(0));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_foreign_table ft"), sql.get(0));
+        Assertions.assertFalse(sql.get(0).contains("information_schema.tables"), sql.get(0));
+        Assertions.assertFalse(sql.get(0).contains("sys_rewrite"), sql.get(0));
+        Assertions.assertFalse(sql.get(0).contains("sys_index"), sql.get(0));
     }
 
     @Test
@@ -431,7 +473,8 @@ class KingbaseAgentTest extends JdbcFakeExecutionBehaviorTest {
 
         agent.listTables("public", new MetadataListConstraints("ord", 30, 60, List.of("TABLE", "VIEW")));
 
-        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_class"), sql.get(0));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_class c"), sql.get(0));
+        Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_tables t"), sql.get(0));
         Assertions.assertTrue(sql.get(0).contains("FROM sys_catalog.sys_views"), sql.get(0));
         Assertions.assertTrue(sql.get(0).contains("UNION ALL"), sql.get(0));
         Assertions.assertTrue(sql.get(0).contains("UPPER(CAST(c.relname AS varchar(256))) LIKE ? ESCAPE '\\\\'"), sql.get(0));
@@ -781,6 +824,33 @@ class KingbaseAgentTest extends JdbcFakeExecutionBehaviorTest {
             }
             if ("createStatement".equals(method.getName())) {
                 return plainStatement;
+            }
+            if ("isClosed".equals(method.getName())) {
+                return false;
+            }
+            return defaultValue(method.getReturnType());
+        });
+    }
+
+    private static Connection compositeAwareTableConnection(List<String> sql) {
+        return proxy(Connection.class, (method, args) -> {
+            if ("prepareStatement".equals(method.getName())) {
+                String preparedSql = String.valueOf(args[0]);
+                sql.add(preparedSql);
+                boolean positivelySelectsTables = preparedSql.contains("FROM sys_catalog.sys_tables t")
+                    && preparedSql.contains("FROM sys_catalog.sys_foreign_table ft");
+                Object[][] rows = positivelySelectsTables
+                    ? new Object[][]{{"orders", "TABLE", null}}
+                    : new Object[][]{{"orders", "TABLE", null}, {"address_type", "TABLE", null}};
+                return proxy(PreparedStatement.class, (statementMethod, statementArgs) -> {
+                    if ("executeQuery".equals(statementMethod.getName())) {
+                        return resultSet(new String[]{"table_name", "table_type", "table_comment"}, rows);
+                    }
+                    if ("setString".equals(statementMethod.getName()) || "close".equals(statementMethod.getName())) {
+                        return null;
+                    }
+                    return defaultValue(statementMethod.getReturnType());
+                });
             }
             if ("isClosed".equals(method.getName())) {
                 return false;

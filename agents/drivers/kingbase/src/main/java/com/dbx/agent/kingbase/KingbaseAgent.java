@@ -869,8 +869,12 @@ public final class KingbaseAgent extends PostgresLikeAgent {
             .append("FROM sys_catalog.sys_class c ")
             .append("JOIN sys_catalog.sys_namespace n ON ").append(KINGBASE_NAMESPACE_OID).append(" = ").append(KINGBASE_REL_NAMESPACE).append(' ')
             .append("LEFT JOIN sys_catalog.sys_description d ON CAST(d.objoid AS varchar(64)) = ").append(KINGBASE_REL_OID).append(" AND d.objsubid = 0 ")
-            .append("WHERE ").append(KINGBASE_SCHEMA_NAME).append(" = ").append(sqlString(schema));
-        appendRegularTablePredicate(sql);
+            .append("WHERE ").append(KINGBASE_SCHEMA_NAME).append(" = ").append(sqlString(schema))
+            .append(" AND (EXISTS (SELECT 1 FROM sys_catalog.sys_tables t ")
+            .append("WHERE CAST(t.schemaname AS varchar(256)) = ").append(KINGBASE_SCHEMA_NAME)
+            .append(" AND CAST(t.tablename AS varchar(256)) = ").append(KINGBASE_REL_NAME).append(')')
+            .append(" OR EXISTS (SELECT 1 FROM sys_catalog.sys_foreign_table ft ")
+            .append("WHERE CAST(ft.ftrelid AS varchar(64)) = ").append(KINGBASE_REL_OID).append("))");
         MetadataSqlSupport.appendNameFilter(sql, args, KINGBASE_REL_NAME, constraints);
         return sql.toString();
     }
@@ -917,19 +921,6 @@ public final class KingbaseAgent extends PostgresLikeAgent {
             .append("WHERE ").append(KINGBASE_MATVIEW_SCHEMA).append(" = ").append(sqlString(schema));
         MetadataSqlSupport.appendNameFilter(sql, args, KINGBASE_MATVIEW_NAME, constraints);
         return sql.toString();
-    }
-
-    private static void appendRegularTablePredicate(StringBuilder sql) {
-        sql.append(" AND NOT EXISTS (SELECT 1 FROM sys_catalog.sys_rewrite r ")
-            .append("WHERE CAST(r.ev_class AS varchar(64)) = ").append(KINGBASE_REL_OID)
-            .append(" AND CAST(r.rulename AS varchar(256)) = '_RETURN')")
-            .append(" AND NOT EXISTS (SELECT 1 FROM sys_catalog.sys_index ix ")
-            .append("WHERE CAST(ix.indexrelid AS varchar(64)) = ").append(KINGBASE_REL_OID).append(')')
-            .append(" AND NOT EXISTS (SELECT 1 FROM sys_catalog.sys_attribute sa1 ")
-            .append("JOIN sys_catalog.sys_attribute sa2 ON CAST(sa2.attrelid AS varchar(64)) = CAST(sa1.attrelid AS varchar(64)) ")
-            .append("WHERE CAST(sa1.attrelid AS varchar(64)) = ").append(KINGBASE_REL_OID)
-            .append(" AND CAST(sa1.attname AS varchar(256)) = 'last_value'")
-            .append(" AND CAST(sa2.attname AS varchar(256)) = 'log_cnt')");
     }
 
     private static void appendRelationVisibilityPredicate(StringBuilder sql) {
