@@ -150,6 +150,10 @@
         # Convenience alias
         packages.default = self.packages.${system}.dbx-desktop;
 
+        # Fast fixed-output target used by CI to validate pnpm dependency hashes
+        # without compiling the frontend and Rust desktop application.
+        packages.dbx-pnpm-deps = self.packages.${system}.dbx-desktop.pnpmDeps;
+
         # ------------------------------------------------------------------ #
         # packages.dbx-desktop — Tauri desktop application                    #
         # Build with: nix build .#dbx-desktop                                 #
@@ -178,7 +182,7 @@
             # `fetcherVersion = 4` is supported for `pnpm_11`
             fetcherVersion = 4;
             # Update with the hash reported by a failed fixed-output build:
-            #   nix build .#dbx-desktop 2>&1 | grep 'got:'
+            #   nix build .#dbx-pnpm-deps 2>&1 | grep 'got:'
             hash = "sha256-Bt3AwBVAdA96B4UWBVDvwNBy/JX2eNn8adPpWueAjcs=";
           };
 
