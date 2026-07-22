@@ -923,6 +923,7 @@ export default {
     domRenderMode: "DOM",
     canvasRenderMode: "Canvas",
     renderModeHint: "Switch between Canvas rendering and the DOM fallback grid.",
+    tableFontFamily: "Table font",
     tableFontSize: "Table font size",
     filter: "Filter",
     conditionHistoryEmpty: "No history yet",

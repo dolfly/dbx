@@ -872,6 +872,7 @@ export default withEnglishFallback({
     domRenderMode: "DOM",
     canvasRenderMode: "Canvas",
     renderModeHint: "Alterna entre el renderizado Canvas y la cuadrícula DOM de respaldo.",
+    tableFontFamily: "Fuente de la tabla",
     tableFontSize: "Tamaño de fuente de la tabla",
     filter: "Filtrar",
     conditionHistoryEmpty: "Sin historial aún",

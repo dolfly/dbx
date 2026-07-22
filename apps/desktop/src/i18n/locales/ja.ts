@@ -867,6 +867,7 @@ export default withEnglishFallback({
     domRenderMode: "DOM",
     canvasRenderMode: "Canvas",
     renderModeHint: "CanvasレンダリングとDOMフォールバックグリッドを切り替えます。",
+    tableFontFamily: "テーブルのフォント",
     tableFontSize: "テーブルのフォントサイズ",
     filter: "フィルター",
     conditionHistoryEmpty: "履歴はまだありません",

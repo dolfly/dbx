@@ -872,6 +872,7 @@ export default withEnglishFallback({
     domRenderMode: "DOM",
     canvasRenderMode: "Canvas",
     renderModeHint: "在 Canvas 渲染和 DOM 備援表格之間切換。",
+    tableFontFamily: "表格字型",
     tableFontSize: "表格字號",
     filter: "篩選",
     conditionHistoryEmpty: "暫無歷史記錄",

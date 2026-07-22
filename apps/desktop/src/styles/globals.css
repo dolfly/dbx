@@ -1354,6 +1354,10 @@ body.dbx-table-reference-dragging * {
   font-size: 12.5px;
 }
 
+.dbx-data-grid-value-font {
+  font-family: var(--dbx-data-grid-font-family);
+}
+
 /* Tailwind CSS v4 targets Safari 16.4+. Keep these legacy WebKit fallbacks
  * isolated so supported WebViews continue using the generated component CSS. */
 @supports not (color: oklch(0.5 0.1 180)) {

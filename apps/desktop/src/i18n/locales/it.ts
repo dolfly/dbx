@@ -870,6 +870,7 @@ export default withEnglishFallback({
     domRenderMode: "DOM",
     canvasRenderMode: "Canvas",
     renderModeHint: "Passa dal rendering Canvas al grid di fallback DOM.",
+    tableFontFamily: "Font della tabella",
     tableFontSize: "Dimensione font tabella",
     filter: "Filtra",
     conditionHistoryEmpty: "Nessuna cronologia ancora",

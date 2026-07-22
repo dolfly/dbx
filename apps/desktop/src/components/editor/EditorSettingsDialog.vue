@@ -21,7 +21,6 @@ import {
   useSettingsStore,
   AI_PROVIDER_PRESETS,
   EDITOR_THEMES,
-  FONT_FAMILIES,
   DEFAULT_EDITOR_SETTINGS,
   DEFAULT_DESKTOP_SETTINGS,
   DEFAULT_SIDEBAR_TABLE_PAGE_SIZE,
@@ -64,7 +63,6 @@ import {
   forgetWebdavSyncSecretsPassphrase,
   forgetWebdavSavedPassword,
   getAppSupportInfo,
-  listSystemFonts,
   saveWebdavSyncSecretsPreference,
   saveWebdavSavedPassword,
   saveSnippetSavedToken,
@@ -119,7 +117,8 @@ import { currentLocale, setLocale, type Locale } from "@/i18n";
 import { LOCALE_OPTIONS } from "@/lib/app/localeOptions";
 import { DEFAULT_WEB_DAV_AUTO_UPLOAD_INTERVAL_MINUTES, DEFAULT_WEB_DAV_REMOTE_PATH, normalizedWebDavAutoUploadInterval, writeWebDavAutoUploadFields } from "@/lib/webdav/webdavAutoUploadConfig";
 import { apiUrl } from "@/lib/common/webPath";
-import { DEFAULT_UI_FONT_FAMILY, SYSTEM_UI_FONT_FAMILY } from "@/lib/app/appFonts";
+import { DEFAULT_DATA_GRID_FONT_FAMILY, DEFAULT_UI_FONT_FAMILY, normalizeCustomFontFamilyInput, readableFontFamily, SYSTEM_UI_FONT_FAMILY } from "@/lib/app/appFonts";
+import { buildFontFamilyOptions, displayFontFamily, isPresetFontFamily, loadSystemFontNames } from "@/lib/app/fontFamilyOptions";
 import { buildAppSupportInfoRows, formatAppSupportInfoForClipboard, type AppSupportInfoLabels } from "@/lib/app/supportInfo";
 import { DateTimePatterns, normalizeSupportedDateTimePattern } from "@/lib/dataGrid/columnFormatter";
 import { MAX_RESULT_PAGE_SIZE, MIN_RESULT_PAGE_SIZE } from "@/lib/dataGrid/paginationPageSize";
@@ -150,9 +149,6 @@ const appThemeModeOptions = computed(() => [
   { value: "dark" as AppThemeMode, label: t("toolbar.themeDark"), icon: Moon },
   { value: "system" as AppThemeMode, label: t("toolbar.themeSystem"), icon: SunMoon },
 ]);
-
-let cachedSystemFonts: string[] | null = null;
-let pendingSystemFonts: Promise<string[]> | null = null;
 
 const props = defineProps<{
   open?: boolean;
@@ -629,43 +625,19 @@ function confirmDeleteSnippet(snippet: SqlSnippet) {
   }
 }
 
-const presetFontLabels = new Map(FONT_FAMILIES.map((font) => [font.value, font.label]));
-const presetFontValues = new Set(FONT_FAMILIES.map((font) => font.value));
 const uiFontPreviewValues = new Set([DEFAULT_UI_FONT_FAMILY, SYSTEM_UI_FONT_FAMILY]);
 
-function cssFontFamilyForName(name: string): string {
-  return `'${name.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}', monospace`;
-}
-
-function readableFontFamily(value: string): string {
-  const first = value.split(",")[0]?.trim() ?? value;
-  return first.replace(/^['"]|['"]$/g, "").replace(/\\'/g, "'");
-}
-
-function normalizeCustomFontFamilyInput(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (trimmed.includes(",") || trimmed.includes("'") || trimmed.includes('"')) return trimmed;
-  return cssFontFamilyForName(trimmed);
-}
-
 const systemFontOptions = computed(() => {
-  const options = new Set(FONT_FAMILIES.map((font) => font.value));
-  for (const font of systemFonts.value) options.add(cssFontFamilyForName(font));
-  if (editFontFamily.value) options.add(editFontFamily.value);
-  if (editTableFontFamily.value) options.add(editTableFontFamily.value);
-  return [...options];
+  return buildFontFamilyOptions(systemFonts.value, [editFontFamily.value]);
 });
+
+const tableFontOptions = computed(() => buildFontFamilyOptions(systemFonts.value, [editTableFontFamily.value], [DEFAULT_DATA_GRID_FONT_FAMILY]));
 
 const uiFontOptions = computed(() => {
   const options = new Set([SYSTEM_UI_FONT_FAMILY, DEFAULT_UI_FONT_FAMILY, ...systemFontOptions.value]);
   if (editUiFontFamily.value) options.add(editUiFontFamily.value);
   return [...options];
 });
-
-function displayFontFamily(value: string): string {
-  return presetFontLabels.get(value) ?? readableFontFamily(value);
-}
 
 function displayUiFontFamily(value: string): string {
   if (value === SYSTEM_UI_FONT_FAMILY) return t("settings.uiFontSystemDefault");
@@ -674,22 +646,14 @@ function displayUiFontFamily(value: string): string {
 }
 
 function fontOptionStyle(value: string, selectedValue = editFontFamily.value) {
-  return presetFontValues.has(value) || uiFontPreviewValues.has(value) || value === selectedValue ? { fontFamily: value } : undefined;
+  return isPresetFontFamily(value) || uiFontPreviewValues.has(value) || value === selectedValue ? { fontFamily: value } : undefined;
 }
 
 async function loadSystemFontOptions() {
   if (systemFontsLoaded.value || systemFontsLoading.value) return;
   systemFontsLoading.value = true;
   try {
-    if (cachedSystemFonts) {
-      systemFonts.value = cachedSystemFonts;
-    } else {
-      pendingSystemFonts ??= listSystemFonts().finally(() => {
-        pendingSystemFonts = null;
-      });
-      cachedSystemFonts = await pendingSystemFonts;
-      systemFonts.value = cachedSystemFonts;
-    }
+    systemFonts.value = await loadSystemFontNames();
     systemFontsLoaded.value = true;
   } catch {
     systemFonts.value = [];
@@ -3571,7 +3535,7 @@ onUnmounted(cleanupPreviewEditor);
                   </div>
                   <SearchableSelect
                     :model-value="editTableFontFamily"
-                    :options="systemFontOptions"
+                    :options="tableFontOptions"
                     :placeholder="t('settings.selectFont')"
                     :search-placeholder="t('settings.searchFont')"
                     :empty-text="t('settings.noFontsFound')"
@@ -3579,8 +3543,8 @@ onUnmounted(cleanupPreviewEditor);
                     allow-custom
                     :display-name="displayFontFamily"
                     :normalize-custom="normalizeCustomFontFamilyInput"
-                    :trigger-class="appearanceFontSearchTriggerClass"
-                    :trigger-icon-class="appearanceFontSearchTriggerIconClass"
+                    trigger-variant="outline"
+                    trigger-class="h-9 w-full max-w-none justify-between"
                     content-class="w-[var(--reka-popover-trigger-width)] min-w-[260px]"
                     @update:model-value="onTableFontFamilyChange"
                     @update:open="(open: boolean) => open && loadSystemFontOptions()"

@@ -3846,7 +3846,7 @@ const editorThemeAccessor = () => settingsStore.editorSettings.theme;
 const editorAppAppearance = () => (isDark.value ? "dark" : "light") as import("@/lib/app/appTheme").AppThemeAppearance;
 const editorAppPalette = () => themePalette.value;
 const editorFontSize = () => settingsStore.editorSettings.fontSize;
-const editorFontFamily = () => settingsStore.editorSettings.fontFamily;
+const detailEditorFontFamily = () => tableFontFamily.value;
 const SIDE_DETAIL_EDITOR_MIN_HEIGHT = 160;
 const SIDE_DETAIL_EDITOR_MAX_HEIGHT = 360;
 const SIDE_DETAIL_EDITOR_LINE_HEIGHT = 20;
@@ -3874,7 +3874,7 @@ watch(valueEditorContainer, async (el) => {
       appAppearance: editorAppAppearance,
       appPalette: editorAppPalette,
       fontSize: editorFontSize,
-      fontFamily: editorFontFamily,
+      fontFamily: detailEditorFontFamily,
     });
     await valueDetailEditor.create(el, detailEditValue.value, activeCellDetail.value?.type);
   } else if (!el && valueDetailEditor) {
@@ -4751,7 +4751,7 @@ function canvasCellContentOverflows(item: RowItem, actualColIdx: number, visible
   const displayText = formatCellCached(item.data[actualColIdx], actualColIdx);
   const editText = cellEditorTextForValue(item.data[actualColIdx], actualColIdx);
   if (editText.includes("\n") || editText.includes("\r") || editText.length > displayText.length) return true;
-  const textWidth = measureCellTextWidth(displayText, `400 13px ${settingsStore.editorSettings.fontFamily}`);
+  const textWidth = measureCellTextWidth(displayText, `400 ${tableFontSize.value}px ${tableFontFamily.value}`);
   return textWidth > Math.max(0, cellWidth - 24);
 }
 
@@ -7761,7 +7761,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
                     <div
                       v-for="cell in item.values"
                       :key="`${item.id}:${cell.recordIndex}`"
-                      class="relative flex shrink-0 items-center border-r border-border/70 px-2 py-0 font-mono truncate"
+                      class="relative flex shrink-0 items-center border-r border-border/70 px-2 py-0 truncate"
                       :class="{
                         'text-muted-foreground italic': cell.isNull,
                         'cell-selected': transposeCellIsSelected(cell.recordIndex, cell.valueIndex) && !displayItems[cell.recordIndex]?.isDirtyCol[cell.valueIndex],
@@ -9265,6 +9265,7 @@ const gridContextMenuItems = computed<ContextMenuItem[]>(() => {
 .data-grid-header-row,
 .data-grid-transpose-header,
 .data-grid-transpose-row {
+  font-family: var(--dbx-data-grid-font-family);
   font-size: var(--dbx-table-font-size, 13px);
 }
 

@@ -4,6 +4,7 @@ import { test } from "vitest";
 
 const dataGridSource = readFileSync("apps/desktop/src/components/grid/DataGrid.vue", "utf8");
 const settingsDialogSource = readFileSync("apps/desktop/src/components/editor/EditorSettingsDialog.vue", "utf8");
+const quickControlSource = readFileSync("apps/desktop/src/components/grid/DataGridFontFamilyControl.vue", "utf8");
 
 test("applies the configured result grid font to DOM and canvas renderers", () => {
   assert.match(dataGridSource, /const tableFontFamily = computed\(\(\) => settingsStore\.editorSettings\.tableFontFamily\)/);
@@ -33,4 +34,21 @@ test("keeps appearance section spacing and help icons aligned without stacked ma
   assert.doesNotMatch(settingsDialogSource, /\.settings-appearance-section > \* \+ \*/);
   assert.match(settingsDialogSource, /activeSettingsTab === 'appearance'" class="settings-appearance-section flex flex-col gap-4 py-2"/);
   assert.match(settingsDialogSource, /<div class="flex min-w-0 items-center gap-1">\s*<Label class="min-w-0 whitespace-normal leading-tight">\{\{ t\("settings\.dataGridFontFamily"\) \}\}<\/Label>/);
+});
+
+test("matches the result grid font selector styling with date and time selectors", () => {
+  const selectorStart = settingsDialogSource.indexOf(`:model-value="editTableFontFamily"`);
+  const selectorEnd = settingsDialogSource.indexOf(`</SearchableSelect>`, selectorStart);
+  const selectorSource = settingsDialogSource.slice(selectorStart, selectorEnd);
+
+  assert.ok(selectorStart >= 0);
+  assert.ok(selectorEnd > selectorStart);
+  assert.match(selectorSource, /trigger-variant="outline"/);
+  assert.match(selectorSource, /trigger-class="h-9 w-full max-w-none justify-between"/);
+});
+
+test("uses a table font label in view options without changing the settings label", () => {
+  assert.match(quickControlSource, /t\("grid\.tableFontFamily"\)/);
+  assert.doesNotMatch(quickControlSource, /t\("settings\.dataGridFontFamily"\)/);
+  assert.match(settingsDialogSource, /t\("settings\.dataGridFontFamily"\)/);
 });
