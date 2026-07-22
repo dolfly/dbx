@@ -2306,6 +2306,7 @@ export async function checkMcpServerStatus(): Promise<import("@/lib/backend/taur
     latest_version: null,
     update_available: false,
     bin_path: null,
+    native_bin_path: null,
     script_path: null,
     install_command: "npm install -g @dbx-app/mcp-server@latest --registry=https://registry.npmjs.org",
     update_command: "npm install -g @dbx-app/mcp-server@latest --registry=https://registry.npmjs.org",

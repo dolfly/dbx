@@ -1449,6 +1449,7 @@ export interface McpServerStatus {
   latest_version: string | null;
   update_available: boolean;
   bin_path: string | null;
+  native_bin_path: string | null;
   script_path: string | null;
   install_command: string;
   update_command: string;
