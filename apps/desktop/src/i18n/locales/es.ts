@@ -97,6 +97,7 @@ export default withEnglishFallback({
     expand: "Expandir barra lateral",
     showMore: "Mostrar {count} más...",
     filterByType: "Filtrar por tipo",
+    showActiveConnectionsOnly: "Mostrar solo conexiones activas",
     sortConnections: "Ordenar conexiones",
     sortConnectionsManual: "Orden manual",
     sortConnectionsAscending: "Nombre: A–Z",

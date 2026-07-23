@@ -97,6 +97,7 @@ export default withEnglishFallback({
     expand: "サイドバーを展開",
     showMore: "さらに{count}件表示...",
     filterByType: "タイプでフィルター",
+    showActiveConnectionsOnly: "アクティブな接続のみを表示",
     sortConnections: "接続を並べ替え",
     sortConnectionsManual: "手動順",
     sortConnectionsAscending: "名前: A–Z",

@@ -97,6 +97,7 @@ export default withEnglishFallback({
     expand: "展開側邊欄",
     showMore: "再顯示 {count} 個……",
     filterByType: "依類型篩選",
+    showActiveConnectionsOnly: "僅顯示作用中連線",
     sortConnections: "連線排序",
     sortConnectionsManual: "手動排序",
     sortConnectionsAscending: "名稱：A–Z",

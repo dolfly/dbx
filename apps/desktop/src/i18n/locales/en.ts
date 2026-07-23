@@ -95,6 +95,7 @@ export default {
     expand: "Expand sidebar",
     showMore: "Show {count} more...",
     filterByType: "Filter by type",
+    showActiveConnectionsOnly: "Show active connections only",
     sortConnections: "Sort connections",
     sortConnectionsManual: "Manual order",
     sortConnectionsAscending: "Name: A–Z",

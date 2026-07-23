@@ -97,6 +97,7 @@ export default withEnglishFallback({
     expand: "展开侧边栏",
     showMore: "加载更多 ({count})...",
     filterByType: "按类型筛选",
+    showActiveConnectionsOnly: "仅显示活跃连接",
     sortConnections: "连接排序",
     sortConnectionsManual: "手动排序",
     sortConnectionsAscending: "名称：A–Z",
