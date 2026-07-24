@@ -744,6 +744,14 @@ const driverProfiles: Record<
     icon: "postgres",
     urlParams: "",
   },
+  cloudberry: {
+    type: "postgres",
+    port: 5432,
+    user: "postgres",
+    label: "Apache Cloudberry",
+    icon: "cloudberry",
+    urlParams: "",
+  },
   redis: { type: "redis", port: 6379, user: "", label: "Redis", icon: "redis" },
   sqlite: { type: "sqlite", port: 0, user: "", label: "SQLite", icon: "sqlite" },
   rqlite: { type: "rqlite", port: 4001, user: "", label: "RQLite", icon: "rqlite" },
@@ -2108,6 +2116,7 @@ function isH2FileJdbcUrlLikePath(value: string): boolean {
 const iconTypeMap: Record<string, string> = {
   mysql: "mysql",
   postgres: "postgres",
+  cloudberry: "cloudberry",
   sqlite: "sqlite",
   rqlite: "rqlite",
   turso: "turso",
@@ -2190,6 +2199,7 @@ const iconTypeMap: Record<string, string> = {
 
 const dbOptions: DbOption[] = [
   { value: "postgres", label: "PostgreSQL" },
+  { value: "cloudberry", label: "Apache Cloudberry" },
   { value: "mysql", label: "MySQL" },
   { value: "mongodb", label: "MongoDB" },
   { value: "redis", label: "Redis" },
@@ -2282,7 +2292,7 @@ const dbCategoryDefinitions: Array<{
   {
     key: "analytics",
     titleKey: "connection.databaseCategoryAnalytics",
-    optionValues: ["clickhouse", "doris", "starrocks", "databend", "selectdb", "databricks", "saphana", "teradata", "vertica", "exasol", "redshift", "snowflake", "trino", "prestosql", "hive", "spark", "bigquery", "kylin", "dremio"],
+    optionValues: ["cloudberry", "clickhouse", "doris", "starrocks", "databend", "selectdb", "databricks", "saphana", "teradata", "vertica", "exasol", "redshift", "snowflake", "trino", "prestosql", "hive", "spark", "bigquery", "kylin", "dremio"],
   },
   {
     key: "domestic",

@@ -2268,6 +2268,15 @@ async fn list_tables_once(
                 .await
                 .map(|tables| filter_table_infos(tables, filter, limit, offset, object_types))
         }
+        PoolKind::Postgres(p) if db_config.as_ref().is_some_and(is_cloudberry_config) => {
+            if object_types.is_some() {
+                db::cloudberry::list_tables_filtered(p, schema, filter, None, None)
+                    .await
+                    .map(|tables| filter_table_infos(tables, filter, limit, offset, object_types))
+            } else {
+                db::cloudberry::list_tables_filtered(p, schema, filter, limit, offset).await
+            }
+        }
         PoolKind::Postgres(p) => {
             if object_types.is_some() {
                 db::postgres::list_tables_filtered(p, schema, filter, None, None)
@@ -4383,6 +4392,9 @@ async fn list_objects_once(
         PoolKind::Postgres(p) if db_config.as_ref().is_some_and(is_questdb_config) => {
             db::questdb::list_objects(p, schema).await.map(unpaged_object_list)
         }
+        PoolKind::Postgres(p) if db_config.as_ref().is_some_and(is_cloudberry_config) => {
+            db::cloudberry::list_objects(p, schema).await.map(unpaged_object_list)
+        }
         PoolKind::Postgres(p) => db::postgres::list_objects(p, schema).await.map(unpaged_object_list),
         _ => {
             drop(connections);
@@ -4498,6 +4510,9 @@ async fn list_completion_objects_once(
         }
         PoolKind::Postgres(p) if db_config.as_ref().is_some_and(is_questdb_config) => {
             db::questdb::list_objects(p, schema).await.map(filter_completion_objects)
+        }
+        PoolKind::Postgres(p) if db_config.as_ref().is_some_and(is_cloudberry_config) => {
+            db::cloudberry::list_objects(p, schema).await.map(filter_completion_objects)
         }
         PoolKind::Postgres(p) => db::postgres::list_objects(p, schema).await.map(filter_completion_objects),
         PoolKind::SqlServer(_) => {
@@ -5412,6 +5427,9 @@ pub async fn get_table_ddl_core(
                 Err(_) => pg_ddl(p, schema, table).await,
             }
         }
+        PoolKind::Postgres(p) if db_config.as_ref().is_some_and(is_cloudberry_config) => {
+            cloudberry_ddl(p, schema, table).await
+        }
         PoolKind::Postgres(p) => pg_ddl(p, schema, table).await,
         PoolKind::Sqlite(p) => sqlite_ddl(p, schema, table).await,
         PoolKind::Rqlite(client) => db::rqlite_driver::table_ddl(client, table).await,
@@ -5427,6 +5445,10 @@ async fn connection_config(state: &AppState, connection_id: &str) -> Option<Conn
 fn is_opengauss_family_config(config: &ConnectionConfig) -> bool {
     matches!(config.db_type, DatabaseType::OpenGauss | DatabaseType::Gaussdb)
         || matches!(config.driver_profile.as_deref(), Some("opengauss" | "gaussdb"))
+}
+
+fn is_cloudberry_config(config: &ConnectionConfig) -> bool {
+    matches!(config.driver_profile.as_deref(), Some("cloudberry"))
 }
 
 fn is_default_oracle_agent_config(config: &ConnectionConfig) -> bool {
@@ -6972,6 +6994,27 @@ pub async fn pg_ddl(pool: &deadpool_postgres::Pool, schema: &str, table: &str) -
         table_comment.as_deref(),
         partition_key.as_deref(),
     ))
+}
+
+pub async fn cloudberry_ddl(pool: &deadpool_postgres::Pool, schema: &str, table: &str) -> Result<String, String> {
+    match db::cloudberry::table_ddl(pool, schema, table).await {
+        Ok(ddl) => Ok(ddl),
+        Err(native_error) => {
+            let base_ddl = pg_ddl(pool, schema, table).await.map_err(|fallback_error| {
+                format!(
+                    "Cloudberry pg_get_tabledef failed: {native_error}; PostgreSQL DDL fallback failed: {fallback_error}"
+                )
+            })?;
+            let modifiers = db::cloudberry::table_modifiers(pool, schema, table).await.map_err(|fallback_error| {
+                format!("Cloudberry pg_get_tabledef failed: {native_error}; modifier fallback failed: {fallback_error}")
+            })?;
+            db::cloudberry::append_table_modifiers(&base_ddl, &modifiers).map_err(|fallback_error| {
+                format!(
+                    "Cloudberry pg_get_tabledef failed: {native_error}; DDL rendering fallback failed: {fallback_error}"
+                )
+            })
+        }
+    }
 }
 
 pub fn render_postgres_table_ddl(

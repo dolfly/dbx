@@ -11,6 +11,7 @@ const assetIcons: Record<string, string> = {
   mysql: "mysql",
   postgres: "postgres",
   postgresql: "postgres",
+  cloudberry: "cloudberry.png",
   sqlite: "sqlite",
   rqlite: "rqlite.png",
   turso: "turso.png",
