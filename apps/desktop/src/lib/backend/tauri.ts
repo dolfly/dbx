@@ -318,6 +318,7 @@ export interface DroppedFilePreviewSqlOptions {
 export type XlsxCellValue = string | number | boolean | null;
 
 export interface DriverInstallProgress {
+  operation_id?: string;
   step: string;
   downloaded?: number;
   total?: number;
@@ -1364,12 +1365,12 @@ export async function restartDriverRuntime(runtimeId: string): Promise<void> {
   return invoke("restart_driver_runtime", { runtimeId });
 }
 
-export async function installAgent(dbType: string, source?: UpdateDownloadSource): Promise<void> {
-  return invoke("install_agent", { dbType, source });
+export async function installAgent(dbType: string, source?: UpdateDownloadSource, operationId?: string): Promise<void> {
+  return invoke("install_agent", { dbType, source, operationId });
 }
 
-export async function upgradeAllAgents(source?: UpdateDownloadSource): Promise<UpgradeAllAgentDriversResult> {
-  return invoke("upgrade_all_agents", { source });
+export async function upgradeAllAgents(source?: UpdateDownloadSource, operationId?: string): Promise<UpgradeAllAgentDriversResult> {
+  return invoke("upgrade_all_agents", { source, operationId });
 }
 
 export async function checkAgentUpdateBlockers(dbTypes: string[]): Promise<AgentUpdateBlocker[]> {
@@ -1392,11 +1393,11 @@ export async function invalidateAgentRegistryCache(): Promise<void> {
   return invoke("invalidate_agent_registry_cache");
 }
 
-export async function importAgentsFromZip(path: string | File): Promise<number> {
+export async function importAgentsFromZip(path: string | File, operationId?: string): Promise<number> {
   if (typeof path !== "string") {
     throw new Error("Desktop offline ZIP import requires a local file path");
   }
-  return invoke("import_agents_from_zip", { path });
+  return invoke("import_agents_from_zip", { path, operationId });
 }
 
 export async function importAgentDriver(dbType: string, path: string | File): Promise<void> {
@@ -1408,8 +1409,8 @@ export async function importAgentDriver(dbType: string, path: string | File): Pr
 
 export const importAgentJar = importAgentDriver;
 
-export async function reinstallJre(jreKey?: string, source?: UpdateDownloadSource): Promise<void> {
-  return invoke("reinstall_jre", { jreKey, source });
+export async function reinstallJre(jreKey?: string, source?: UpdateDownloadSource, operationId?: string): Promise<void> {
+  return invoke("reinstall_jre", { jreKey, source, operationId });
 }
 
 export async function uninstallJre(jreKey: string): Promise<void> {
