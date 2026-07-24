@@ -139,17 +139,17 @@ func detectMySQLCompatMode(db *sql.DB) bool {
 		// sql_mode for MySQL syntax toggles such as ANSI_QUOTES.
 		return strings.EqualFold(strings.TrimSpace(databaseMode), "mysql")
 	case errors.Is(err, sql.ErrNoRows):
-		// Older Kingbase versions may not expose database_mode. Fall back to the
-		// legacy sql_mode existence probe in that case.
+		// Older Kingbase versions may not expose database_mode. Probe the syntax
+		// directly because non-MySQL modes can still expose a sql_mode setting.
 	default:
-		// Ignore metadata errors and fall back to the legacy probe below.
+		// Ignore metadata errors and fall back to the syntax probe below.
 	}
-	return mysqlSQLModeExists(db)
+	return supportsBacktickIdentifiers(db)
 }
 
-func mysqlSQLModeExists(db *sql.DB) bool {
+func supportsBacktickIdentifiers(db *sql.DB) bool {
 	var value int
-	return db.QueryRow("SELECT 1 FROM sys_catalog.sys_settings WHERE LOWER(name) = 'sql_mode'").Scan(&value) == nil
+	return db.QueryRow("SELECT 1 AS `dbx_identifier_probe`").Scan(&value) == nil
 }
 
 func (s *server) identifierQuote() string {

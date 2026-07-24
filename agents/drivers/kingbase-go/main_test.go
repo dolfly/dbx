@@ -52,11 +52,11 @@ type fallbackConn struct {
 }
 
 type modeDetectionDriverState struct {
-	mu            sync.Mutex
-	queries       []string
-	databaseMode  *string
-	sqlModeExists bool
-	databaseErr   error
+	mu                  sync.Mutex
+	queries             []string
+	databaseMode        *string
+	backtickIdentifiers bool
+	databaseErr         error
 }
 
 type modeDetectionDriver struct{}
@@ -192,12 +192,11 @@ func (connection *modeDetectionConn) QueryContext(_ context.Context, query strin
 			rows = append(rows, []driver.Value{*connection.state.databaseMode})
 		}
 		return &valueRows{columns: []string{"setting"}, rows: rows}, nil
-	case strings.Contains(query, "LOWER(name) = 'sql_mode'"):
-		rows := [][]driver.Value{}
-		if connection.state.sqlModeExists {
-			rows = append(rows, []driver.Value{int64(1)})
+	case strings.Contains(query, "AS `dbx_identifier_probe`"):
+		if !connection.state.backtickIdentifiers {
+			return nil, &gokb.Error{Code: gokb.ErrorCode("42601"), Message: "syntax error at or near `"}
 		}
-		return &valueRows{columns: []string{"value"}, rows: rows}, nil
+		return &valueRows{columns: []string{"dbx_identifier_probe"}, rows: [][]driver.Value{{int64(1)}}}, nil
 	default:
 		return nil, errors.New("unexpected query: " + query)
 	}
@@ -706,11 +705,11 @@ func TestGetTableCommentUsesPostgresCatalogComment(t *testing.T) {
 	}
 }
 
-func TestDetectMySQLCompatModePrefersDatabaseModeOverSQLModePresence(t *testing.T) {
+func TestDetectMySQLCompatModePrefersDatabaseModeOverSyntaxProbe(t *testing.T) {
 	oracle := "oracle"
 	state := &modeDetectionDriverState{
-		databaseMode:  &oracle,
-		sqlModeExists: true,
+		databaseMode:        &oracle,
+		backtickIdentifiers: true,
 	}
 	db := openModeDetectionDB(t, state)
 
@@ -722,6 +721,22 @@ func TestDetectMySQLCompatModePrefersDatabaseModeOverSQLModePresence(t *testing.
 	defer state.mu.Unlock()
 	if len(state.queries) != 1 || !strings.Contains(state.queries[0], "database_mode") {
 		t.Fatalf("database_mode should be authoritative when present: %v", state.queries)
+	}
+}
+
+func TestDetectMySQLCompatModeAcceptsExplicitMySQLMode(t *testing.T) {
+	mysql := "mysql"
+	state := &modeDetectionDriverState{databaseMode: &mysql}
+	db := openModeDetectionDB(t, state)
+
+	if !detectMySQLCompatMode(db) {
+		t.Fatal("database_mode=mysql should use MySQL compatibility")
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if len(state.queries) != 1 || !strings.Contains(state.queries[0], "database_mode") {
+		t.Fatalf("explicit MySQL mode should not need the syntax probe: %v", state.queries)
 	}
 }
 
@@ -751,18 +766,27 @@ func TestConnectionInfoReportsCompatibilityIdentifierQuote(t *testing.T) {
 	}
 }
 
-func TestDetectMySQLCompatModeFallsBackToSQLModeWhenDatabaseModeMissing(t *testing.T) {
-	state := &modeDetectionDriverState{sqlModeExists: true}
+func TestDetectMySQLCompatModeProbesBacktickSyntaxWhenDatabaseModeMissing(t *testing.T) {
+	state := &modeDetectionDriverState{backtickIdentifiers: true}
 	db := openModeDetectionDB(t, state)
 
 	if !detectMySQLCompatMode(db) {
-		t.Fatal("legacy server with sql_mode but no database_mode should still use MySQL compatibility")
+		t.Fatal("legacy server accepting backtick identifiers should use MySQL compatibility")
 	}
 
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	if len(state.queries) != 2 {
-		t.Fatalf("expected database_mode probe followed by sql_mode fallback, got: %v", state.queries)
+	if len(state.queries) != 2 || !strings.Contains(state.queries[1], "dbx_identifier_probe") {
+		t.Fatalf("expected database_mode probe followed by backtick syntax probe, got: %v", state.queries)
+	}
+}
+
+func TestDetectMySQLCompatModeRejectsSQLModeWithoutBacktickSyntax(t *testing.T) {
+	state := &modeDetectionDriverState{}
+	db := openModeDetectionDB(t, state)
+
+	if detectMySQLCompatMode(db) {
+		t.Fatal("legacy server rejecting backtick identifiers must not use MySQL compatibility")
 	}
 }
 
