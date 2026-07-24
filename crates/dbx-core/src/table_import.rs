@@ -3280,6 +3280,7 @@ fn decimal_data_type(db_type: &DatabaseType) -> &'static str {
         | DatabaseType::Redshift
         | DatabaseType::Kingbase
         | DatabaseType::Highgo
+        | DatabaseType::Uxdb
         | DatabaseType::Kwdb
         | DatabaseType::Vastbase => "DOUBLE PRECISION",
         DatabaseType::Sqlite | DatabaseType::Rqlite | DatabaseType::Turso | DatabaseType::CloudflareD1 => "REAL",
@@ -3335,6 +3336,7 @@ fn json_data_type(db_type: &DatabaseType) -> &'static str {
         | DatabaseType::OpenGauss
         | DatabaseType::Kingbase
         | DatabaseType::Highgo
+        | DatabaseType::Uxdb
         | DatabaseType::Kwdb
         | DatabaseType::Vastbase => "JSONB",
         DatabaseType::Mysql | DatabaseType::Databend => "JSON",

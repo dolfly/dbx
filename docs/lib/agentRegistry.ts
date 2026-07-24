@@ -137,6 +137,7 @@ const driverLabels: Record<string, string> = {
   tdengine: "TDengine",
   teradata: "Teradata",
   trino: "Trino",
+  uxdb: "优炫 UXDB",
   vastbase: "Vastbase",
   vertica: "Vertica",
   xugu: "虚谷 XuguDB",

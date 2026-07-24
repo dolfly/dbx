@@ -817,6 +817,7 @@ const driverProfiles: Record<
   questdb: { type: "questdb", port: 8812, user: "questdb", label: "QuestDB", icon: "questdb" },
   kingbase: { type: "kingbase", port: 54321, user: "system", label: "KingBase", icon: "kingbase" },
   highgo: { type: "highgo", port: 5866, user: "highgo", label: "瀚高 HighGo", icon: "highgo" },
+  uxdb: { type: "uxdb", port: 52025, user: "uxdb", label: "优炫 UXDB", icon: "uxdb" },
   yashandb: { type: "yashandb", port: 1688, user: "sys", label: "崖山 YashanDB", icon: "yashandb" },
   vastbase: { type: "vastbase", port: 5432, user: "vastbase", label: "Vastbase", icon: "vastbase" },
   doris: { type: "mysql", port: 9030, user: "root", label: "Doris", icon: "doris", urlParams: "" },
@@ -2077,6 +2078,7 @@ function defaultDatabaseForProfile() {
   if (form.value.db_type === "databend") return "default";
   if (selectedType.value === "cockroachdb") return "defaultdb";
   if (form.value.db_type === "highgo") return "highgo";
+  if (form.value.db_type === "uxdb") return "uxdb";
   if (form.value.db_type === "yashandb") return "yasdb";
   if (form.value.db_type === "postgres" || form.value.db_type === "vastbase") return "postgres";
   if (form.value.db_type === "sqlserver") return "master";
@@ -2155,6 +2157,7 @@ const iconTypeMap: Record<string, string> = {
   questdb: "questdb",
   kingbase: "kingbase",
   highgo: "highgo",
+  uxdb: "uxdb",
   yashandb: "yashandb",
   vastbase: "vastbase",
   doris: "doris",

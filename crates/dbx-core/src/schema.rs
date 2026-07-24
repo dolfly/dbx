@@ -3437,6 +3437,7 @@ mod tests {
         assert!(!is_agent_postgres_metadata_fallback_config(&test_connection_config(DatabaseType::Kingbase)));
         assert!(is_agent_postgres_metadata_fallback_config(&test_connection_config(DatabaseType::Highgo)));
         assert!(is_agent_postgres_metadata_fallback_config(&test_connection_config(DatabaseType::Vastbase)));
+        assert!(!is_agent_postgres_metadata_fallback_config(&test_connection_config(DatabaseType::Uxdb)));
         assert!(!is_agent_postgres_metadata_fallback_config(&test_connection_config(DatabaseType::Postgres)));
         assert!(!is_agent_postgres_metadata_fallback_config(&test_connection_config(DatabaseType::Mysql)));
     }
@@ -4535,8 +4536,9 @@ fn filter_completion_objects(objects: Vec<db::ObjectInfo>) -> Vec<db::ObjectInfo
 }
 
 fn is_agent_postgres_metadata_fallback_config(config: &ConnectionConfig) -> bool {
-    // Kingbase has dedicated agent metadata SQL and may carry JDBC-specific URL
-    // parameters that the native PostgreSQL driver cannot parse.
+    // HighGo and Vastbase can use the native PostgreSQL metadata path when their
+    // agent returns no rows. UXDB is JDBC-only; opening a PostgreSQL fallback
+    // connection there turns valid empty schemas into misleading DB errors.
     matches!(config.db_type, DatabaseType::Highgo | DatabaseType::Vastbase)
 }
 
@@ -6038,6 +6040,7 @@ async fn get_object_source_once(
                     | DatabaseType::Questdb
                     | DatabaseType::Kingbase
                     | DatabaseType::Highgo
+                    | DatabaseType::Uxdb
                     | DatabaseType::Vastbase
             )
         }) {

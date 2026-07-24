@@ -139,6 +139,7 @@ macro_rules! agent_connection_pool_database_type {
         DatabaseType::Dameng
             | DatabaseType::Kingbase
             | DatabaseType::Highgo
+            | DatabaseType::Uxdb
             | DatabaseType::Vastbase
             | DatabaseType::Goldendb
             | DatabaseType::Databend
@@ -4978,6 +4979,10 @@ mod tests {
         config.db_type = DatabaseType::Sqlite;
         config.host = db_path.to_string_lossy().to_string();
         config.port = 0;
+        // This exercises a plain SQLite file. The shared MySQL fixture carries
+        // credentials, and a SQLite password intentionally opts into SQLCipher.
+        config.username.clear();
+        config.password.clear();
 
         state.configs.write().await.insert(config.id.clone(), config);
 

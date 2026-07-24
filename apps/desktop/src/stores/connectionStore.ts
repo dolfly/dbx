@@ -898,6 +898,7 @@ export const useConnectionStore = defineStore("connection", () => {
       kwdb: "KWDB",
       kingbase: "KingBase",
       highgo: "瀚高 HighGo",
+      uxdb: "优炫 UXDB",
       yashandb: "崖山 YashanDB",
       vastbase: "Vastbase",
       goldendb: "GoldenDB",
@@ -933,6 +934,8 @@ export const useConnectionStore = defineStore("connection", () => {
       dbType = "kingbase" as ConnectionConfig["db_type"];
     } else if (profile === "highgo" && dbType === "postgres") {
       dbType = "highgo" as ConnectionConfig["db_type"];
+    } else if (profile === "uxdb" && dbType === "postgres") {
+      dbType = "uxdb" as ConnectionConfig["db_type"];
     } else if (profile === "vastbase" && dbType === "postgres") {
       dbType = "vastbase" as ConnectionConfig["db_type"];
     } else if (profile === "goldendb" && dbType === "mysql") {
@@ -4354,7 +4357,7 @@ export const useConnectionStore = defineStore("connection", () => {
   }
 
   function isPostgresLikeForExtensions(dbType?: string): boolean {
-    return dbType === "postgres" || dbType === "gaussdb" || dbType === "kwdb" || dbType === "opengauss" || dbType === "highgo" || dbType === "vastbase" || dbType === "kingbase";
+    return dbType === "postgres" || dbType === "gaussdb" || dbType === "kwdb" || dbType === "opengauss" || dbType === "highgo" || dbType === "uxdb" || dbType === "vastbase" || dbType === "kingbase";
   }
 
   function metadataQuerySchema(connectionId: string, database: string, schema?: string): string {

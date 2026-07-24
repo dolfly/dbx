@@ -501,6 +501,7 @@ fn is_postgres_family_target(target_db: &DatabaseType) -> bool {
             | DatabaseType::Redshift
             | DatabaseType::Kingbase
             | DatabaseType::Highgo
+            | DatabaseType::Uxdb
             | DatabaseType::Kwdb
             | DatabaseType::Vastbase
     )

@@ -2716,6 +2716,7 @@ fn is_postgres_like_pattern_database(database_type: Option<DatabaseType>) -> boo
                 | DatabaseType::Kwdb
                 | DatabaseType::Kingbase
                 | DatabaseType::Highgo
+                | DatabaseType::Uxdb
                 | DatabaseType::Vastbase
                 | DatabaseType::OpenGauss
         )
@@ -2829,6 +2830,7 @@ fn uses_keyless_row_predicate(database_type: Option<DatabaseType>) -> bool {
                 | DatabaseType::Kwdb
                 | DatabaseType::Kingbase
                 | DatabaseType::Highgo
+                | DatabaseType::Uxdb
                 | DatabaseType::Vastbase
                 | DatabaseType::Goldendb
                 | DatabaseType::Yashandb

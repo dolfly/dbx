@@ -25,6 +25,7 @@ export type DatabaseType =
   | "gaussdb"
   | "kingbase"
   | "highgo"
+  | "uxdb"
   | "vastbase"
   | "goldendb"
   | "kwdb"

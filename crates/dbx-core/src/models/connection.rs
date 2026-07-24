@@ -468,6 +468,7 @@ pub enum DatabaseType {
     Dameng,
     Kingbase,
     Highgo,
+    Uxdb,
     Vastbase,
     Goldendb,
     Gaussdb,
@@ -852,6 +853,7 @@ impl ConnectionConfig {
             DatabaseType::Kwdb => Some("defaultdb"),
             DatabaseType::Vastbase => Some("postgres"),
             DatabaseType::Highgo => Some("highgo"),
+            DatabaseType::Uxdb => Some("uxdb"),
             DatabaseType::Yashandb => Some("yasdb"),
             DatabaseType::Oscar => Some("osrdb"),
             DatabaseType::Firebird => Some("employee"),
@@ -994,6 +996,7 @@ impl ConnectionConfig {
             DatabaseType::Dameng => format!("dm://{host}:{port}{db_part}"),
             DatabaseType::Kingbase => format!("kingbase://{host}:{port}{db_part}"),
             DatabaseType::Highgo => format!("highgo://{host}:{port}{db_part}"),
+            DatabaseType::Uxdb => format!("uxdb://{host}:{port}{db_part}"),
             DatabaseType::Vastbase => format!("vastbase://{host}:{port}{db_part}"),
             DatabaseType::Goldendb => format!("goldendb://{host}:{port}{db_part}"),
             DatabaseType::Gaussdb => format!("gaussdb://{host}:{port}{db_part}"),
@@ -1146,6 +1149,9 @@ impl ConnectionConfig {
             }
             DatabaseType::Highgo => {
                 format!("highgo://{}:{}@{host}:{port}{db_part}", username, password)
+            }
+            DatabaseType::Uxdb => {
+                format!("uxdb://{}:{}@{host}:{port}{db_part}", username, password)
             }
             DatabaseType::Vastbase => {
                 format!("vastbase://{}:{}@{host}:{port}{db_part}", username, password)
@@ -2542,6 +2548,15 @@ mod tests {
 
         assert_eq!(config.effective_database(), Some("postgres"));
         assert_eq!(config.connection_url(), "vastbase://vastbase:secret@10.1.2.3:5432/postgres");
+    }
+
+    #[test]
+    fn uxdb_connection_url_uses_uxdb_scheme() {
+        let mut config = mysql_config("uxdb", "secret", Some("warehouse"));
+        config.db_type = DatabaseType::Uxdb;
+        config.port = 52025;
+
+        assert_eq!(config.connection_url(), "uxdb://uxdb:secret@10.1.2.3:52025/warehouse");
     }
 
     #[test]
