@@ -1,13 +1,13 @@
 {
   "repository": "t8y2/dbx",
-  "generatedAt": "2026-10-02T11:28:15.235Z",
-  "stars": 23825,
+  "generatedAt": "2026-10-02T22:16:56.616Z",
+  "stars": 23948,
   "contributors": [
     {
       "login": "t8y2",
       "avatarUrl": "https://avatars.githubusercontent.com/u/77960507?v=4",
       "profileUrl": "https://github.com/t8y2",
-      "commits": 3843,
+      "commits": 3851,
       "mergedPullRequests": 34,
       "firstContributionAt": "2026-04-30T08:14:51Z",
       "latestContributionAt": "2026-09-28T05:44:52Z"
@@ -16,10 +16,10 @@
       "login": "zipg",
       "avatarUrl": "https://avatars.githubusercontent.com/u/4047349?v=4",
       "profileUrl": "https://github.com/zipg",
-      "commits": 1041,
-      "mergedPullRequests": 1037,
+      "commits": 1042,
+      "mergedPullRequests": 1038,
       "firstContributionAt": "2026-06-22T06:10:59Z",
-      "latestContributionAt": "2026-10-02T01:50:36Z"
+      "latestContributionAt": "2026-10-02T15:44:29Z"
     },
     {
       "login": "eryajf",
@@ -70,10 +70,10 @@
       "login": "onenewcode",
       "avatarUrl": "https://avatars.githubusercontent.com/u/94808747?v=4",
       "profileUrl": "https://github.com/onenewcode",
-      "commits": 98,
-      "mergedPullRequests": 98,
+      "commits": 99,
+      "mergedPullRequests": 99,
       "firstContributionAt": "2026-06-30T01:53:31Z",
-      "latestContributionAt": "2026-10-01T14:51:20Z"
+      "latestContributionAt": "2026-10-02T15:46:02Z"
     },
     {
       "login": "serenez",
@@ -238,6 +238,15 @@
       "latestContributionAt": "2026-09-28T13:05:01Z"
     },
     {
+      "login": "yiqiui",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/49514152?v=4",
+      "profileUrl": "https://github.com/yiqiui",
+      "commits": 19,
+      "mergedPullRequests": 19,
+      "firstContributionAt": "2026-09-15T06:20:25Z",
+      "latestContributionAt": "2026-10-02T16:22:00Z"
+    },
+    {
       "login": "Mo-Moore",
       "avatarUrl": "https://avatars.githubusercontent.com/u/33098900?v=4",
       "profileUrl": "https://github.com/Mo-Moore",
@@ -245,15 +254,6 @@
       "mergedPullRequests": 18,
       "firstContributionAt": "2026-08-27T05:54:45Z",
       "latestContributionAt": "2026-09-24T08:16:19Z"
-    },
-    {
-      "login": "yiqiui",
-      "avatarUrl": "https://avatars.githubusercontent.com/u/49514152?v=4",
-      "profileUrl": "https://github.com/yiqiui",
-      "commits": 18,
-      "mergedPullRequests": 18,
-      "firstContributionAt": "2026-09-15T06:20:25Z",
-      "latestContributionAt": "2026-09-25T22:46:59Z"
     },
     {
       "login": "yavon007",
@@ -625,6 +625,15 @@
       "latestContributionAt": "2026-07-01T11:05:45Z"
     },
     {
+      "login": "lxk955",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/164191365?v=4",
+      "profileUrl": "https://github.com/lxk955",
+      "commits": 6,
+      "mergedPullRequests": 6,
+      "firstContributionAt": "2026-10-01T06:24:16Z",
+      "latestContributionAt": "2026-10-02T16:21:13Z"
+    },
+    {
       "login": "possebon",
       "avatarUrl": "https://avatars.githubusercontent.com/u/257745?v=4",
       "profileUrl": "https://github.com/possebon",
@@ -830,15 +839,6 @@
       "mergedPullRequests": 4,
       "firstContributionAt": "2026-08-21T12:23:37Z",
       "latestContributionAt": "2026-09-20T17:41:45Z"
-    },
-    {
-      "login": "lxk955",
-      "avatarUrl": "https://avatars.githubusercontent.com/u/164191365?v=4",
-      "profileUrl": "https://github.com/lxk955",
-      "commits": 4,
-      "mergedPullRequests": 4,
-      "firstContributionAt": "2026-10-01T06:24:16Z",
-      "latestContributionAt": "2026-10-01T18:10:16Z"
     },
     {
       "login": "New2Niu",
@@ -1469,6 +1469,15 @@
       "mergedPullRequests": 2,
       "firstContributionAt": "2026-07-29T12:10:15Z",
       "latestContributionAt": "2026-07-30T18:01:46Z"
+    },
+    {
+      "login": "Totopo27",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/35828647?v=4",
+      "profileUrl": "https://github.com/Totopo27",
+      "commits": 2,
+      "mergedPullRequests": 2,
+      "firstContributionAt": "2026-10-02T13:19:49Z",
+      "latestContributionAt": "2026-10-02T16:55:59Z"
     },
     {
       "login": "Tssshhhh",
