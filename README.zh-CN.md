@@ -148,6 +148,17 @@
   </tr>
   <tr>
     <td align="center" valign="middle" width="200">
+      <a href="https://mate.vip/ee/" target="_blank">
+        <img src="docs/public/sponsors/taiyi-card.png" alt="太一企业版" width="175" />
+      </a>
+    </td>
+    <td>
+      太一智能体企业版是面向央国企的私有化智能体平台，采用“1+N+N”架构：1 个平台、N 个终端、N 个场景。**可信**：Java 微服务架构，私有化部署，全程留痕可审计。**可控**：关键操作人工审批，资料按密级管理。**可达**：按单位模板直接生成公文、台账和汇报材料。**可复制**：场景方案包化交付，便于推广和二次开发。欢迎预约演示，或在 GitHub 搜索 MateClaw。
+      <a href="https://mate.vip/ee/" target="_blank">访问太一企业版</a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle" width="200">
       <a href="https://www.trustasia.com/ssl/trustasia/code-signing" target="_blank">
         <img src="docs/public/sponsors/trustasia-card.png" alt="TrustAsia" width="175" />
       </a>
