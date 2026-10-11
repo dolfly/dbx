@@ -2442,6 +2442,7 @@ export default withEnglishFallback({
     localFilterFor: "本地值筛选“{column}”",
     databaseValueFilter: "数据库值筛选",
     databaseValueFilterFor: "数据库值筛选“{column}”",
+    filterFromCurrentPage: "从当前页取值",
     columnFormatter: "列格式化",
     columnFormatterActive: "该列已应用格式化展示",
     columnFormatterFor: "格式化“{column}”",

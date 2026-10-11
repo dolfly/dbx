@@ -2342,6 +2342,7 @@ export default withEnglishFallback({
     localFilterFor: "Nilai Lokal Untuk '{column}'",
     databaseValueFilter: "Filter nilai database",
     databaseValueFilterFor: "Nilai Database Untuk '{column}'",
+    filterFromCurrentPage: "Ambil nilai dari halaman saat ini",
     columnFormatter: "Pemformat kolom",
     columnFormatterActive: "Tampilan terformat sedang aktif",
     columnFormatterFor: "Pemformat untuk '{column}'",

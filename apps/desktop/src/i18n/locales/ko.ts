@@ -2306,6 +2306,7 @@ export default withEnglishFallback({
     localFilterFor: "'{column}' 로컬 값",
     databaseValueFilter: "데이터베이스 값 필터",
     databaseValueFilterFor: "'{column}' 데이터베이스 값",
+    filterFromCurrentPage: "현재 페이지에서 값 가져오기",
     columnFormatter: "컬럼 포매터",
     columnFormatterActive: "이 열에 서식이 적용되어 있습니다",
     columnFormatterFor: "'{column}' 포매터",

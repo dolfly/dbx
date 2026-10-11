@@ -2405,6 +2405,7 @@ export default withEnglishFallback({
     localFilterFor: "Локальные значения для «{column}»",
     databaseValueFilter: "Фильтр значений базы данных",
     databaseValueFilterFor: "Значения базы данных для «{column}»",
+    filterFromCurrentPage: "Получать значения с текущей страницы",
     columnFormatter: "Форматирование столбца",
     columnFormatterActive: "Форматированный вывод включён",
     columnFormatterFor: "Форматирование для «{column}»",

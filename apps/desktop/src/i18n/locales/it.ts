@@ -2252,6 +2252,7 @@ export default withEnglishFallback({
     localFilterFor: "Valori locali per '{column}'",
     databaseValueFilter: "Filtro valori database",
     databaseValueFilterFor: "Valori database per '{column}'",
+    filterFromCurrentPage: "Ottieni valori dalla pagina corrente",
     columnFormatter: "Formattatore colonna",
     columnFormatterActive: "La visualizzazione formattata è attiva",
     columnFormatterFor: "Formattatore per '{column}'",

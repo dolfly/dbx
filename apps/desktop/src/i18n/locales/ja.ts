@@ -2258,6 +2258,7 @@ export default withEnglishFallback({
     localFilterFor: "'{column}'のローカル値",
     databaseValueFilter: "データベース値フィルター",
     databaseValueFilterFor: "'{column}'のデータベース値",
+    filterFromCurrentPage: "現在のページから値を取得",
     columnFormatter: "列フォーマッター",
     columnFormatterActive: "この列には表示形式が適用されています",
     columnFormatterFor: "'{column}'のフォーマッター",

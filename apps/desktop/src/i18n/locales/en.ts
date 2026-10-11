@@ -2507,6 +2507,7 @@ export default {
     localFilterFor: "Local Values For '{column}'",
     databaseValueFilter: "Database value filter",
     databaseValueFilterFor: "Database Values For '{column}'",
+    filterFromCurrentPage: "Get values from current page",
     columnFormatter: "Column formatter",
     columnFormatterActive: "Formatted display is active",
     columnFormatterFor: "Formatter for '{column}'",

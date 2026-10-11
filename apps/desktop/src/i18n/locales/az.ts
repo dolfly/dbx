@@ -2070,6 +2070,7 @@ export default withEnglishFallback({
     localFilterFor: "'{column}' üçün yerli dəyərlər",
     databaseValueFilter: "Verilənlər bazası dəyərlərinin süzgəci",
     databaseValueFilterFor: "'{column}' üçün verilənlər bazası dəyərləri",
+    filterFromCurrentPage: "Cari səhifədən dəyərləri al",
     columnFormatter: "Sütun formatlayıcısı",
     columnFormatterActive: "Formatlanmış göstərmə aktivdir",
     columnFormatterFor: "'{column}' üçün formatlayıcı",

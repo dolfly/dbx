@@ -2253,6 +2253,7 @@ export default withEnglishFallback({
     localFilterFor: "本機值篩選「{column}」",
     databaseValueFilter: "資料庫值篩選",
     databaseValueFilterFor: "資料庫值篩選「{column}」",
+    filterFromCurrentPage: "從目前頁取值",
     columnFormatter: "欄位格式設定",
     columnFormatterActive: "此欄位已套用格式化顯示",
     columnFormatterFor: "格式化「{column}」",

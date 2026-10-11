@@ -2063,6 +2063,7 @@ export default withEnglishFallback({
     localFilterFor: "'{column}' İçin Yerel Değerler",
     databaseValueFilter: "Veritabanı değer filtresi",
     databaseValueFilterFor: "'{column}' İçin Veritabanı Değerleri",
+    filterFromCurrentPage: "Geçerli sayfadan değerleri al",
     columnFormatter: "Sütun biçimlendirici",
     columnFormatterActive: "Biçimlendirilmiş görünüm etkin",
     columnFormatterFor: "'{column}' için biçimlendirici",
