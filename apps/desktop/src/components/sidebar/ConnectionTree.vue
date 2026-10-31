@@ -194,6 +194,7 @@ const sidebarObjectSourceFormatDialect = computed(() => sqlFormatDialectForDbTyp
 type SearchScope = "connection" | "database" | "schema" | "table" | "view";
 const selectedSearchScopes = ref<SearchScope[]>([]);
 const searchCollapsedIds = ref<Set<string>>(new Set());
+const searchExpandedIds = ref<Set<string>>(new Set());
 let searchTimer: number | undefined;
 const remoteTableSearchDebouncer = createSidebarTableSearchDebouncer();
 // Local-mode table searches debounce like remote ones: rapid typing coalesces
@@ -219,11 +220,18 @@ type TableSearchFocusRestore = {
   selection: TableSearchSelection | null;
 };
 
+function resetSearchExpandedIdsForQueryChange(value: string, previousValue: string) {
+  const normalized = regexMode.value ? value.trim() : value.trim().toLowerCase();
+  const previousNormalized = regexMode.value ? previousValue.trim() : previousValue.trim().toLowerCase();
+  if (!normalized || normalized !== previousNormalized) searchExpandedIds.value = new Set();
+}
+
 watch(
   searchQuery,
-  (value) => {
+  (value, previousValue) => {
     const normalized = regexMode.value ? value.trim() : value.trim().toLowerCase();
     window.clearTimeout(searchTimer);
+    resetSearchExpandedIdsForQueryChange(value, previousValue);
 
     if (!normalized) {
       deferredSearchQuery.value = "";
@@ -343,11 +351,11 @@ const connectionListSortMenuItems = computed(() => [
 const isConnectionListAlphabeticallySorted = computed(() => settingsStore.editorSettings.sidebarConnectionSortMode !== "manual");
 const sidebarListOptionsLabel = computed(() => t("sidebar.listOptions"));
 const sidebarListOptionItems = computed(() => [
-  ...(["fuzzy", "contains"] as const).map((mode, index) => ({
+  ...(["fuzzy", "contains", "exact"] as const).map((mode, index) => ({
     value: `match:${mode}`,
-    label: t(mode === "fuzzy" ? "sidebar.searchMatchModeFuzzy" : "sidebar.searchMatchModeContains"),
+    label: t(mode === "fuzzy" ? "sidebar.searchMatchModeFuzzy" : mode === "exact" ? "sidebar.searchMatchModeExact" : "sidebar.searchMatchModeContains"),
     groupLabel: index === 0 ? t("sidebar.searchMatchMode") : undefined,
-    tooltip: t("sidebar.searchMatchModeTooltip"),
+    tooltip: t(mode === "exact" ? "sidebar.searchMatchModeExact" : "sidebar.searchMatchModeTooltip"),
     role: "menuitemradio" as const,
     disabled: regexMode.value,
   })),
@@ -408,8 +416,8 @@ function toggleSearchScope(scope: SearchScope) {
 }
 
 function selectSidebarListOption(value: string) {
-  if (value === "match:fuzzy" || value === "match:contains") {
-    if (!regexMode.value) settingsStore.updateEditorSettings({ sidebarSearchMatchMode: value === "match:contains" ? "contains" : "fuzzy" });
+  if (value === "match:fuzzy" || value === "match:contains" || value === "match:exact") {
+    if (!regexMode.value) settingsStore.updateEditorSettings({ sidebarSearchMatchMode: value === "match:exact" ? "exact" : value === "match:contains" ? "contains" : "fuzzy" });
     return;
   }
   if (value.startsWith("sort:")) {
@@ -545,6 +553,7 @@ function globalSearchConnectionRoots() {
 
 const globalSearchContext = [
   () => regexMode.value,
+  () => settingsStore.editorSettings.sidebarSearchMatchMode,
   () => settingsStore.editorSettings.sidebarGlobalSearchLocal,
   () => settingsStore.editorSettings.sidebarObjectDisplay,
   () => settingsStore.editorSettings.sidebarSearchOpenedDatabasesOnly,
@@ -685,7 +694,7 @@ async function loadGlobalTableSearchIndexes(shouldCancel: () => boolean, onProgr
 function filterGloballyIndexedTables(nodes: TreeNode[]): TreeNode[] {
   if (!deferredSearchQuery.value) return nodes;
   const matcher = createSidebarLabelMatcher(deferredSearchQuery.value, { regexMode: regexMode.value, matchMode: searchMatchMode.value });
-  const matchingScopes = globalTableSearchScopes.value.map((scope) => ({ ...scope, entries: scope.entries.filter((entry) => !!matcher(entry.name) || !!matcher(entry.comment || "")) })).filter((scope) => scope.entries.length > 0);
+  const matchingScopes = globalTableSearchScopes.value.map((scope) => ({ ...scope, entries: scope.entries.filter((entry) => !!matcher(entry.name) || ((regexMode.value || searchMatchMode.value !== "exact") && !!matcher(entry.comment || ""))) })).filter((scope) => scope.entries.length > 0);
   return mergeSidebarRegexIndexScopes(nodes, matchingScopes);
 }
 
@@ -762,6 +771,7 @@ const filteredNodes = computed(() => {
   nodes = filterSidebarTree(nodes, q, searchCollapsedIds.value, searchableNodeTypes.value, {
     regexMode: regexMode.value,
     matchMode: searchMatchMode.value,
+    searchExpandedIds: searchExpandedIds.value,
     resolveLabel: (node) => (node.type === "nacos-access-control" ? t("nacos.accessControlSidebarLabel") : node.label),
   });
   if (q && !regexMode.value) {
@@ -2148,8 +2158,10 @@ function findSchemaNode(nodes: TreeNode[], connId: string, database: string, sch
 function onSearchToggle(node: TreeNode) {
   if (!isTreeSearchFiltering.value) return;
   const next = new Set(searchCollapsedIds.value);
+  const expanded = new Set(searchExpandedIds.value);
   if (node.isExpanded) {
     next.add(node.id);
+    if (node.type === "group-partitions") expanded.delete(node.id);
     const collectDescendants = (children: readonly TreeNode[]) => {
       for (const child of children) {
         next.add(child.id);
@@ -2162,8 +2174,10 @@ function onSearchToggle(node: TreeNode) {
     if (node.children?.length) collectDescendants(node.children);
   } else {
     next.delete(node.id);
+    if (node.type === "group-partitions") expanded.add(node.id);
   }
   searchCollapsedIds.value = next;
+  searchExpandedIds.value = expanded;
 }
 
 function onNodeToggled(node: TreeNode, expanded: boolean) {
